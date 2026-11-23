@@ -1,0 +1,73 @@
+import 'server-only';
+import { json, LIMITS, readJson, storedToResponse } from '@/lib/http';
+import { requireSingleIfMatch } from '@/lib/etag';
+import { assertUuidPath } from '@/lib/validation';
+import { requireIdempotencyKey } from '@/lib/services/idempotency';
+import { createCourse, listCoursesForAdmin, updateCourse } from '@/lib/services/courses';
+import { getTemplateForAdmin, saveTemplate } from '@/lib/services/template';
+import { getSystemApiStatus, issueSystemKey, revokeSystemKey, updateSystemClient } from '@/lib/services/system-api-key';
+import type { HandlerCtx } from '@/lib/route';
+import type { UserPrincipal } from '@/lib/auth/principal';
+
+type Ctx = HandlerCtx<UserPrincipal>;
+
+export async function handleAdminListCourses(c: Ctx) {
+  return json({ data: await listCoursesForAdmin(c.db, c.principal.workspaceId) }, 200, c.requestId);
+}
+
+export async function handleAdminCreateCourse(c: Ctx) {
+  const key = requireIdempotencyKey(c.req.headers.get('idempotency-key'));
+  const body = await readJson(c.req, LIMITS.single);
+  return storedToResponse(await createCourse(c.db, c.principal, body, key, c.requestId), c.requestId);
+}
+
+export async function handleAdminUpdateCourse(c: Ctx) {
+  const id = assertUuidPath(c.params.id);
+  const key = requireIdempotencyKey(c.req.headers.get('idempotency-key'));
+  const ifMatch = requireSingleIfMatch(c.req.headers.get('if-match'));
+  const body = await readJson(c.req, LIMITS.single);
+  return storedToResponse(await updateCourse(c.db, c.principal, id, body, ifMatch, key, c.requestId), c.requestId);
+}
+
+export async function handleAdminGetTemplate(c: Ctx) {
+  const t = await getTemplateForAdmin(c.db, c.principal);
+  return json({ data: t.data }, 200, c.requestId, { ETag: t.etag });
+}
+
+export async function handleAdminSaveTemplate(c: Ctx) {
+  const key = requireIdempotencyKey(c.req.headers.get('idempotency-key'));
+  const ifMatch = requireSingleIfMatch(c.req.headers.get('if-match'));
+  const body = await readJson(c.req, LIMITS.edit);
+  return storedToResponse(await saveTemplate(c.db, c.principal, body, ifMatch, key, c.requestId), c.requestId);
+}
+
+// ---------------------------------------------------------------------------
+// 시스템 API 키
+// ---------------------------------------------------------------------------
+
+export async function handleApiKeyStatus(c: Ctx) {
+  const s = await getSystemApiStatus(c.db, c.principal);
+  return json({ data: s }, 200, c.requestId, s.etag ? { ETag: s.etag } : {});
+}
+
+export async function handleApiKeyIssue(c: Ctx) {
+  const key = requireIdempotencyKey(c.req.headers.get('idempotency-key'));
+  const body = await readJson(c.req, LIMITS.single);
+  const r = await issueSystemKey(c.db, c.principal, body, key, c.requestId);
+  // 원문이 포함될 수 있는 응답: 공유 캐시·멱등성 저장 대상 아님 (private, no-store 는 json() 기본값)
+  return json(r.body, r.status, c.requestId);
+}
+
+export async function handleApiKeyRevoke(c: Ctx) {
+  const id = assertUuidPath(c.params.id);
+  const key = requireIdempotencyKey(c.req.headers.get('idempotency-key'));
+  const body = await readJson(c.req, LIMITS.single);
+  return storedToResponse(await revokeSystemKey(c.db, c.principal, id, body, key, c.requestId), c.requestId);
+}
+
+export async function handleApiKeySettings(c: Ctx) {
+  const key = requireIdempotencyKey(c.req.headers.get('idempotency-key'));
+  const ifMatch = requireSingleIfMatch(c.req.headers.get('if-match'));
+  const body = await readJson(c.req, LIMITS.single);
+  return storedToResponse(await updateSystemClient(c.db, c.principal, body, ifMatch, key, c.requestId), c.requestId);
+}
