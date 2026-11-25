@@ -3,7 +3,7 @@ import { json, LIMITS, readJson, storedToResponse } from '@/lib/http';
 import { requireSingleIfMatch } from '@/lib/etag';
 import { assertUuidPath } from '@/lib/validation';
 import { requireIdempotencyKey } from '@/lib/services/idempotency';
-import { createCourse, importCourses, listCoursesForAdmin, updateCourse } from '@/lib/services/courses';
+import { importCourses, listCoursesForAdmin, updateCourse } from '@/lib/services/courses';
 import { getTemplateForAdmin, saveTemplate } from '@/lib/services/template';
 import { getSystemApiStatus, issueSystemKey, revokeSystemKey } from '@/lib/services/system-api-key';
 import { inviteEmployee, listEmployees, resendInvitation, updateEmployee } from '@/lib/services/employees';
@@ -18,11 +18,6 @@ export async function handleAdminListCourses(c: Ctx) {
   return json({ data: await listCoursesForAdmin(c.db, c.principal.workspaceId) }, 200, c.requestId);
 }
 
-export async function handleAdminCreateCourse(c: Ctx) {
-  const key = requireIdempotencyKey(c.req.headers.get('idempotency-key'));
-  const body = await readJson(c.req, LIMITS.single);
-  return storedToResponse(await createCourse(c.db, c.principal, body, key, c.requestId), c.requestId);
-}
 
 export async function handleAdminUpdateCourse(c: Ctx) {
   const id = assertUuidPath(c.params.id);

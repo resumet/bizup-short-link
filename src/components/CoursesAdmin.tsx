@@ -28,7 +28,6 @@ const EMPTY = { name: '', instructor_name: '', cohort: '', webinar_at: '' };
 
 export function CoursesAdmin({ courses }: { courses: Course[] }) {
   const router = useRouter();
-  const [form, setForm] = useState(EMPTY);
   const [editing, setEditing] = useState<string | null>(null);
   const [draft, setDraft] = useState(EMPTY);
   const [busy, setBusy] = useState(false);
@@ -56,11 +55,6 @@ export function CoursesAdmin({ courses }: { courses: Course[] }) {
     name: v.name, instructor_name: v.instructor_name || null, cohort: v.cohort || null, webinar_at: fromKstInput(v.webinar_at),
   });
 
-  const create = () => call(
-    () => apiFetch('/internal/admin/courses', { method: 'POST', idempotencyKey: newIdempotencyKey(), body: bodyOf(form) }),
-    '강의를 등록했습니다.',
-  ).then((ok) => ok && setForm(EMPTY));
-
   const patch = (c: Course, body: Record<string, unknown>, okText: string) => call(
     () => apiFetch(`/internal/admin/courses/${c.id}`, { method: 'PATCH', idempotencyKey: newIdempotencyKey(), ifMatch: etagOf(c), body }),
     okText,
@@ -68,19 +62,10 @@ export function CoursesAdmin({ courses }: { courses: Course[] }) {
 
   return (
     <>
-      <form className="card form inline-form" onSubmit={(e) => { e.preventDefault(); void create(); }}>
-        <div className="row" style={{ justifyContent: 'space-between', alignItems: 'center' }}>
-          <h2 style={{ margin: 0 }}>강의 등록</h2>
-          <CourseImportButton existingIds={courses.map((c) => c.id)} onAdded={() => router.refresh()} />
-        </div>
-        <div className="row">
-          <label className="grow">강의명 <input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} maxLength={120} required /></label>
-          <label>강사명 <input value={form.instructor_name} onChange={(e) => setForm({ ...form, instructor_name: e.target.value })} maxLength={80} /></label>
-          <label>기수 <input value={form.cohort} onChange={(e) => setForm({ ...form, cohort: e.target.value })} maxLength={40} style={{ width: '5rem' }} /></label>
-          <label>웨비나 일정 <input type="datetime-local" value={form.webinar_at} onChange={(e) => setForm({ ...form, webinar_at: e.target.value })} /></label>
-          <button className="button" type="submit" disabled={busy || !form.name.trim()}>{busy && <span className="spinner" aria-hidden="true" />}등록</button>
-        </div>
-      </form>
+      <div className="row" style={{ justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.75rem' }}>
+        <span className="muted">강의는 강의정보 가져오기로 추가합니다. 추가한 강의는 수정·종료할 수 있습니다.</span>
+        <CourseImportButton existingIds={courses.map((c) => c.id)} onAdded={() => router.refresh()} />
+      </div>
       {msg && <p className={msg.kind}>{msg.text}</p>}
 
       <div className="table-wrap">
