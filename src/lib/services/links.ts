@@ -32,7 +32,7 @@ export type ApiBase = '/api/v1' | '/internal';
 // ---------------------------------------------------------------------------
 export interface LinkRow {
   id: string;
-  link_type?: string | null;
+  type_key?: string | null;
   workspace_id: string;
   issued_domain: string;
   short_code: string;
@@ -71,7 +71,7 @@ export async function loadSlots(q: Queryable, linkId: string): Promise<LinkSlot[
 export const LINK_COLUMNS = `l.id, l.workspace_id, l.issued_domain, l.short_code, l.name, l.initial_destination_url,
   l.destination_url, l.course_id, l.external_ref, l.status, l.version, l.source, l.creation_mode,
   l.generation_batch_id, l.created_by_type, l.created_by_id, l.created_by_label, l.updated_by_type,
-  l.updated_by_id, l.updated_by_label, l.created_at, l.updated_at, l.active_slot, l.link_type`;
+  l.updated_by_id, l.updated_by_label, l.created_at, l.updated_at, l.active_slot, l.type_key`;
 
 export function serializeLink(
   l: LinkRow, policy: Pick<UrlPolicy, 'primaryHost' | 'urlConfigVersion'>, slots?: LinkSlot[] | null,
@@ -79,7 +79,7 @@ export function serializeLink(
   return {
     id: l.id,
     course_id: l.course_id,
-    type: l.link_type ?? null,
+    type_key: l.type_key ?? null,
     name: l.name,
     domain: policy.primaryHost,
     issued_domain: l.issued_domain,
@@ -447,12 +447,12 @@ async function runCreate(
         if (plan.linkType) {
           // 회사 잠금 안에서 확인 → 같은 강의·유형 동시 생성도 1개만 성공 (유니크 인덱스가 최종 보장)
           const dup = await q.query<{ id: string; short_code: string; issued_domain: string }>(
-            `select id, short_code, issued_domain from bzup.links where workspace_id = $1 and course_id = $2 and link_type = $3 and deleted_at is null`,
+            `select id, short_code, issued_domain from bzup.links where workspace_id = $1 and course_id = $2 and type_key = $3 and deleted_at is null`,
             [p.workspaceId, course.id, plan.linkType],
           );
           if (dup[0]) {
             throw new AppError('LINK_TYPE_EXISTS', undefined, {
-              details: { course_id: course.id, type: plan.linkType, link_id: dup[0].id, short_code: dup[0].short_code, short_url: shortUrlFor(policy.primaryHost, dup[0].short_code) },
+              details: { course_id: course.id, type_key: plan.linkType, type_label: (await q.query<{ label: string }>(`select label from bzup.short_link_types where key = $1`, [plan.linkType]))[0]?.label ?? null, link_id: dup[0].id, short_code: dup[0].short_code, short_url: shortUrlFor(policy.primaryHost, dup[0].short_code) },
             });
           }
         }
@@ -463,7 +463,7 @@ async function runCreate(
                (id, workspace_id, issued_domain, short_code, name, initial_destination_url, destination_url,
                 canonical_destination, destination_fingerprint, course_id, external_ref, status, version, source,
                 creation_mode, generation_batch_id, created_by_type, created_by_id, created_by_label,
-                created_api_key_id, updated_by_type, updated_by_id, updated_by_label, created_at, updated_at, active_slot, link_type)
+                created_api_key_id, updated_by_type, updated_by_id, updated_by_label, created_at, updated_at, active_slot, type_key)
              values ($1,$2,$3,$4,$5,$6,$6,$7,$8,$9,$10,'active',1,$11,$12,$13,$14,$15,$16,$17,$14,$15,$16,
                      clock_timestamp(), clock_timestamp(), $18, $19)
              returning ${LINK_COLUMNS}`,
@@ -1032,7 +1032,7 @@ export async function deleteLink(
     );
     const snapshot = {
       name: cur.name, short_code: cur.short_code, destination_url: cur.destination_url, course_id: cur.course_id,
-      status: cur.status, type: cur.link_type ?? null,
+      status: cur.status, type_key: cur.type_key ?? null,
     };
     await q.query(
       `insert into bzup.link_revisions

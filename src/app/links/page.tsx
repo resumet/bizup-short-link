@@ -101,12 +101,12 @@ export default async function LinksPage({ searchParams }: { searchParams: Promis
           <div className="table-wrap">
           <table className="table">
             <thead>
-              <tr><th>타입</th><th>명칭</th><th>짧은 주소</th><th>현재 목적지</th><th>강의</th><th>상태</th><th className="right">조회수</th><th>생성</th><th>최종 수정</th></tr>
+              <tr><th>유형</th><th>명칭</th><th>짧은 주소</th><th>현재 목적지</th><th>강의</th><th>상태</th><th className="right">조회수</th><th>생성</th><th>최종 수정</th></tr>
             </thead>
             <tbody>
               {result.data.map((l) => (
                 <tr key={l.id}>
-                  <td className="nowrap num">{l.type ? <code>{l.type}</code> : <span className="muted">-</span>}</td>
+                  <td className="nowrap num">{l.type_key ? <span title={l.type_key}>{l.type_label ?? l.type_key}</span> : <span className="muted">-</span>}</td>
                   <td className="col-name"><Link href={`/links/${l.id}`}>{l.name}</Link></td>
                   <td className="nowrap"><span className="short"><code>{l.short_url.replace(/^https?:\/\//, '')}</code><CopyButton text={l.short_url} /></span></td>
                   <td className="ellipsis" title={l.destination_url}>

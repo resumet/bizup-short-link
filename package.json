@@ -16,7 +16,9 @@
     "db:migrate": "node --env-file=.env.local scripts/migrate.mjs",
     "db:cleanup": "node --env-file=.env.local scripts/cleanup.mjs",
     "db:migrate:prod": "node --env-file=.env.vercel --env-file=.env.prod-admin scripts/migrate.mjs",
-    "bootstrap:prod": "node --env-file=.env.vercel --env-file=.env.prod-admin scripts/bootstrap.mjs"
+    "bootstrap:prod": "node --env-file=.env.vercel --env-file=.env.prod-admin scripts/bootstrap.mjs",
+    "types": "node --env-file=.env.local scripts/link-types.mjs",
+    "types:prod": "node --env-file=.env.vercel --env-file=.env.prod-admin scripts/link-types.mjs"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.1175.0",

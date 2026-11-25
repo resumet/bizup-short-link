@@ -146,9 +146,10 @@ export async function listLinks(q: Queryable, principal: Principal, query: Recor
     where += ` and (l.created_at, l.id) < ($${params.length - 1}::timestamptz, $${params.length}::uuid)`;
   }
   params.push(limit + 1);
-  const rows = await q.query<LinkRow & { course_name: string | null; course_status: string | null; created_at_text: string; total_views: number; active_slot_label: string | null }>(
+  const rows = await q.query<LinkRow & { course_name: string | null; course_status: string | null; created_at_text: string; total_views: number; active_slot_label: string | null; type_label: string | null }>(
     `select ${LINK_COLUMNS}, c.name as course_name, c.status as course_status, l.created_at::text as created_at_text,
             coalesce(vt.total_views, 0)::bigint as total_views,
+            (select t.label from bzup.short_link_types t where t.key = l.type_key) as type_label,
             (select ds.label from bzup.link_destination_slots ds where ds.link_id = l.id and ds.position = l.active_slot) as active_slot_label
        from bzup.links l
        left join bzup.courses c on c.workspace_id = l.workspace_id and c.id = l.course_id
@@ -168,6 +169,7 @@ export async function listLinks(q: Queryable, principal: Principal, query: Recor
     data: page.map((r) => ({
       ...serializeLink(r, policy), course_name: r.course_name, course_status: r.course_status, total_views: Number(r.total_views),
       active_slot_label: r.active_slot_label,
+      type_label: r.type_label,
     })),
     pagination: { next_cursor: nextCursor, has_more: hasMore, limit },
   };

@@ -118,3 +118,14 @@ PRD 23.1의 개발 순서를 따릅니다. 각 단계 진행 상황은 아래와
 - [x] 링크 관리 화면 `/links`, `/links/new`, `/links/{id}`, 자동생성 팝업
 - [x] 로컬 개발 로그인 (`DEV_AUTH`, 운영·Vercel 에서는 비활성)
 - [ ] OpenAPI 3.1 명세
+
+## 짧은 주소 유형 (type_key)
+
+- 명세: `/docs/api` (공개), `public/openapi.yaml` → `https://bizup.im/openapi.yaml`
+- 유형 조회 `GET /api/v1/short-link-types`, 발급 `POST /api/v1/short-links` (`course_id`, `type_key`, `destination_url`, `name`)
+- 숫자 `type`(0000~9999)은 폐기. `type` 필드가 오면 422 `VALIDATION_ERROR`
+- 같은 강의·유형은 링크 1개 (DB 고유 인덱스 `links_course_type_key_unique`, 409 `LINK_TYPE_EXISTS` 로 기존 주소 반환)
+- 유형 관리(운영자 전용): `npm run types[:prod] -- list | add <key> "<label>" | rename <key> "<label>" | deactivate <key> | activate <key>`
+  - key 변경·삭제 불가(DB 트리거), 삭제 대신 비활성화, key 재사용 금지
+- 전환 마이그레이션 `20261126010000_short_link_type_key.sql` 은 **기존 발급 링크 전체와 종속 데이터를 삭제**한다 (테스트 기간 결정, 비가역).
+  강의·직원·API 키·코드 원장은 유지. 대시보드 전달 문서: `docs/dashboard-short-link-type-key-handoff.md`
