@@ -86,7 +86,7 @@ function codeFromShortUrl(q: string, policy: UrlPolicy): string | null {
 
 export function buildWhere(workspaceId: string, f: LinkFilters, policy: UrlPolicy, params: unknown[]): string {
   const p = (v: unknown) => { params.push(v); return `$${params.length}`; };
-  const w = [`l.workspace_id = ${p(workspaceId)}`];
+  const w = [`l.workspace_id = ${p(workspaceId)}`, 'l.deleted_at is null'];
   if (f.q) {
     const like = `%${escapeLike(f.q)}%`;
     const ors = [

@@ -41,7 +41,7 @@ export function serializeCourse(c: CourseRow & { link_count?: number }) {
 export async function listCoursesForAdmin(q: Queryable, workspaceId: string) {
   const rows = await q.query<CourseRow & { link_count: number }>(
     `select c.id, c.name, c.instructor_name, c.cohort, c.webinar_at, c.source, c.status, c.version, c.created_at, c.updated_at,
-            (select count(*)::int from bzup.links l where l.workspace_id = c.workspace_id and l.course_id = c.id) as link_count
+            (select count(*)::int from bzup.links l where l.workspace_id = c.workspace_id and l.course_id = c.id and l.deleted_at is null) as link_count
        from bzup.courses c where c.workspace_id = $1
       order by case c.status when 'active' then 0 else 1 end, c.webinar_at desc nulls last, c.name, c.created_at`,
     [workspaceId],

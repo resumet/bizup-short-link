@@ -65,7 +65,7 @@ export async function analyzeDuplicates(q: Queryable, workspaceId: string, rows:
                 l.created_at, l.canonical_destination
            from bzup.links l
            left join bzup.courses c on c.workspace_id = l.workspace_id and c.id = l.course_id
-          where l.workspace_id = $1 and l.destination_fingerprint = any($2::bytea[])
+          where l.workspace_id = $1 and l.destination_fingerprint = any($2::bytea[]) and l.deleted_at is null
           order by l.created_at desc, l.id desc`,
         [workspaceId, fps],
       )

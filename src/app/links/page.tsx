@@ -46,6 +46,9 @@ export default async function LinksPage({ searchParams }: { searchParams: Promis
     <div className="page">
       <TopBar me={me} active="links" />
       <main className="content">
+        {sp.notice === 'deleted' && <p className="ok" role="status">링크를 삭제했습니다. 해당 짧은 주소는 더 이상 작동하지 않습니다.</p>}
+        {sp.notice === 'welcome' && <p className="ok" role="status">가입이 완료되었습니다. BZUP Link 에 오신 것을 환영합니다.</p>}
+        {sp.notice === 'password_changed' && <p className="ok" role="status">비밀번호를 변경했습니다.</p>}
         <div className="title-row">
           <h1>링크 목록</h1>
           <div className="actions">

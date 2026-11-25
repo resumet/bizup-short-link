@@ -447,7 +447,7 @@ async function runCreate(
         if (plan.linkType) {
           // 회사 잠금 안에서 확인 → 같은 강의·유형 동시 생성도 1개만 성공 (유니크 인덱스가 최종 보장)
           const dup = await q.query<{ id: string; short_code: string; issued_domain: string }>(
-            `select id, short_code, issued_domain from bzup.links where workspace_id = $1 and course_id = $2 and link_type = $3`,
+            `select id, short_code, issued_domain from bzup.links where workspace_id = $1 and course_id = $2 and link_type = $3 and deleted_at is null`,
             [p.workspaceId, course.id, plan.linkType],
           );
           if (dup[0]) {
@@ -744,7 +744,7 @@ export async function preflight(db: Db, principal: Principal, body: unknown) {
 export async function getLink(q: Queryable, principal: Principal, id: string) {
   requirePermission(principal, 'links:read');
   const rows = await q.query<LinkRow>(
-    `select ${LINK_COLUMNS} from bzup.links l where l.workspace_id = $1 and l.id = $2`,
+    `select ${LINK_COLUMNS} from bzup.links l where l.workspace_id = $1 and l.id = $2 and l.deleted_at is null`,
     [principal.workspaceId, id],
   );
   if (!rows[0]) throw new AppError('NOT_FOUND');
@@ -755,7 +755,7 @@ export async function getLink(q: Queryable, principal: Principal, id: string) {
 
 export async function getLinkRevisions(q: Queryable, principal: Principal, id: string) {
   requirePermission(principal, 'links:read');
-  const exists = await q.query(`select 1 from bzup.links where workspace_id = $1 and id = $2`, [principal.workspaceId, id]);
+  const exists = await q.query(`select 1 from bzup.links where workspace_id = $1 and id = $2 and deleted_at is null`, [principal.workspaceId, id]);
   if (!exists.length) throw new AppError('NOT_FOUND');
   const rows = await q.query<{
     version: number; action: string; changed_fields: string[]; before_snapshot: unknown; after_snapshot: unknown;
@@ -859,7 +859,7 @@ export async function patchLink(
     await lockWorkspace(q, principal.workspaceId);
     const p = await recheckPrincipal(q, principal, 'links:update');
     const rows = await q.query<LinkRow>(
-      `select ${LINK_COLUMNS} from bzup.links l where l.workspace_id = $1 and l.id = $2 for update`,
+      `select ${LINK_COLUMNS} from bzup.links l where l.workspace_id = $1 and l.id = $2 and l.deleted_at is null for update`,
       [p.workspaceId, id],
     );
     const cur = rows[0];
@@ -980,6 +980,69 @@ export async function patchLink(
       body: { data: serializeLink(result, policy, await loadSlots(q, id)), changed_fields: changed },
       headers: { ETag: linkEtag(result.id, Number(result.version), policy.urlConfigVersion) },
     };
+    await saveSuccess(q, idem, resp, { resultLinkId: id });
+    return { ...resp, replayed: false };
+  });
+}
+
+// ---------------------------------------------------------------------------
+// 삭제 (상세 화면 위험 구역)
+// - 기존 명칭을 정확히 입력해야 삭제된다
+// - 행은 남기고 deleted_at 표시: 짧은 주소는 즉시 404, 목록·검색·중복 확인에서 제외, 코드는 재사용하지 않는다
+// ---------------------------------------------------------------------------
+export async function deleteLink(
+  db: Db, principal: Principal, id: string, body: unknown, ifMatch: string, ctx: WriteContext,
+): Promise<StoredResponse & { replayed: boolean }> {
+  requirePermission(principal, 'links:update');
+  if (!isObject(body)) throw new AppError('INVALID_JSON');
+  assertAllowedFields(body, ['confirm_name']);
+  if (typeof body.confirm_name !== 'string' || !body.confirm_name.trim()) {
+    throw validationError('삭제하려면 링크 명칭을 입력해 주세요.', [{ field: 'confirm_name', message: '명칭 입력' }]);
+  }
+  const confirmName = body.confirm_name.trim();
+  const idem = idemContext(principal, 'DELETE', `/links/${id}`, ctx.idempotencyKey, hashRequest({ body, if_match: ifMatch }));
+  const quick = await findSuccess(db, idem);
+  if (quick) return { ...quick, replayed: true };
+  await consume(db, limits.write(principal));
+
+  return db.tx(async (q) => {
+    await lockRequestScope(q, idemScope(idem));
+    const replay = await findSuccess(q, idem);
+    if (replay) return { ...replay, replayed: true };
+    await lockWorkspace(q, principal.workspaceId);
+    const p = await recheckPrincipal(q, principal, 'links:update');
+    const rows = await q.query<LinkRow>(
+      `select ${LINK_COLUMNS} from bzup.links l where l.workspace_id = $1 and l.id = $2 and l.deleted_at is null for update`,
+      [p.workspaceId, id],
+    );
+    const cur = rows[0];
+    if (!cur) throw new AppError('NOT_FOUND');
+    const policy = await loadUrlPolicy(q);
+    const currentEtag = linkEtag(cur.id, Number(cur.version), policy.urlConfigVersion);
+    if (ifMatch !== currentEtag) throw new AppError('PRECONDITION_FAILED', undefined, { headers: { ETag: currentEtag } });
+    if (confirmName !== cur.name) {
+      throw validationError('입력한 명칭이 링크 명칭과 일치하지 않습니다.', [{ field: 'confirm_name', message: '명칭 불일치' }]);
+    }
+    const actor = principalRef(p);
+    const [u] = await q.query<{ version: number; updated_at: Date }>(
+      `update bzup.links set deleted_at = clock_timestamp(), deleted_by_label = $3, status = 'inactive', version = version + 1,
+              updated_by_type = $4, updated_by_id = $5, updated_by_label = $3, updated_at = clock_timestamp()
+        where workspace_id = $1 and id = $2 returning version, updated_at`,
+      [p.workspaceId, id, actor.label, actor.type, actor.id],
+    );
+    const snapshot = {
+      name: cur.name, short_code: cur.short_code, destination_url: cur.destination_url, course_id: cur.course_id,
+      status: cur.status, type: cur.link_type ?? null,
+    };
+    await q.query(
+      `insert into bzup.link_revisions
+         (workspace_id, link_id, version, action, changed_fields, before_snapshot, after_snapshot,
+          actor_type, actor_id, actor_label_snapshot, api_key_id, request_id, created_at)
+       values ($1,$2,$3,'deleted',$4,$5::text::jsonb,$6::text::jsonb,$7,$8,$9,$10,$11,$12)`,
+      [p.workspaceId, id, u.version, ['deleted'], JSON.stringify(snapshot), JSON.stringify({ ...snapshot, deleted: true }),
+        actor.type, actor.id, actor.label, actor.apiKeyId, ctx.requestId, u.updated_at],
+    );
+    const resp: StoredResponse = { status: 200, body: { data: { id, deleted: true, short_code: cur.short_code } }, headers: {} };
     await saveSuccess(q, idem, resp, { resultLinkId: id });
     return { ...resp, replayed: false };
   });

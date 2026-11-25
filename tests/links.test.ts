@@ -2,7 +2,7 @@ import { beforeEach, describe, expect, it } from 'vitest';
 import { setupDb, HOST } from './helpers/db';
 import { AppError } from '@/lib/errors';
 import {
-  createBatch, createSingleLink, getLink, getLinkRevisions, parseBatchCreateBody, parsePatchBody,
+  createBatch, createSingleLink, deleteLink, getLink, getLinkRevisions, parseBatchCreateBody, parsePatchBody,
   parseSingleCreateBody, patchLink, preflight,
 } from '@/lib/services/links';
 import type { Principal, UserPrincipal } from '@/lib/auth/principal';
@@ -337,5 +337,36 @@ describe('짧은 주소 type (강의당 type 별 1개)', () => {
     await mk(courseB, '0001', 'https://t.example.com/4');
     expect((await env.db.query(`select count(*)::int as n from bzup.links where link_type is not null`))[0]).toEqual({ n: 3 });
     await expect(env.db.query(`update bzup.links set link_type = 'abcd' where link_type = '0002'`)).rejects.toThrow();
+  });
+});
+
+describe('링크 삭제 (위험 구역)', () => {
+  it('명칭이 같아야 삭제, 삭제 후 조회·목록·이동 제외, type 재사용 가능', async () => {
+    const { principal } = await env.addApiKey(owner, ['links:create']);
+    const mk = (url: string) => createSingleLink(env.db, principal,
+      { ...parseSingleCreateBody({ course_id: courseA, name: '삭제할 링크', destination_url: url }), linkType: '0100' },
+      { idempotencyKey: crypto.randomUUID(), requestId: 'r', apiBase: '/api/v1' });
+    const r = await mk('https://del.example.com/1');
+    const d = (r.body as { data: { id: string } }).data;
+    const etag = r.headers.ETag;
+    const del = (name: string, e = etag, who: Principal = editor) =>
+      deleteLink(env.db, who, d.id, { confirm_name: name }, e, { idempotencyKey: crypto.randomUUID(), requestId: 'r', apiBase: '/internal' });
+
+    expect((await err(del('다른 이름'))).code).toBe('VALIDATION_ERROR');
+    const viewer = await env.addUser('viewer');
+    expect((await err(del('삭제할 링크', etag, viewer))).code).toBe('INSUFFICIENT_PERMISSION');
+    await del('삭제할 링크');
+
+    expect((await err(getLink(env.db, editor, d.id))).code).toBe('NOT_FOUND');
+    const [row] = await env.db.query<{ deleted_at: Date | null; status: string }>(`select deleted_at, status from bzup.links where id = $1`, [d.id]);
+    expect(row.deleted_at).not.toBeNull();
+    expect(row.status).toBe('inactive');
+    const revs = await env.db.query<{ action: string }>(`select action from bzup.link_revisions where link_id = $1 order by version`, [d.id]);
+    expect(revs.map((x) => x.action)).toEqual(['created', 'deleted']);
+    // 같은 강의·type 으로 다시 생성 가능, 같은 목적지 중복 확인에도 안 걸림
+    const again = await mk('https://del.example.com/1');
+    expect(again.status).toBe(201);
+    // 이미 삭제된 링크 재삭제는 404
+    expect((await err(del('삭제할 링크'))).code).toBe('NOT_FOUND');
   });
 });

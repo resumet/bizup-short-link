@@ -5,7 +5,7 @@ import { requireSingleIfMatch } from '@/lib/etag';
 import { assertAllowedFields, assertUuidPath, isObject } from '@/lib/validation';
 import { requireIdempotencyKey } from '@/lib/services/idempotency';
 import {
-  batchBody, createBatch, createSingleLink, getLink, getLinkRevisions, parseBatchCreateBody, parsePatchBody,
+  batchBody, createBatch, createSingleLink, deleteLink, getLink, getLinkRevisions, parseBatchCreateBody, parsePatchBody,
   parseSingleCreateBody, patchLink, preflight, serializeLink,
 } from '@/lib/services/links';
 import { listLinks } from '@/lib/services/link-query';
@@ -20,6 +20,15 @@ export async function handleCreateLink(c: HandlerCtx) {
   const key = requireIdempotencyKey(c.req.headers.get('idempotency-key'));
   const input = parseSingleCreateBody(await readJson(c.req, LIMITS.single));
   const r = await createSingleLink(c.db, c.principal, input, writeCtx(c, key));
+  return storedToResponse(r, c.requestId);
+}
+
+export async function handleDeleteLink(c: HandlerCtx) {
+  const id = assertUuidPath(c.params.id);
+  requirePermission(c.principal, 'links:update');
+  const key = requireIdempotencyKey(c.req.headers.get('idempotency-key'));
+  const ifMatch = requireSingleIfMatch(c.req.headers.get('if-match'));
+  const r = await deleteLink(c.db, c.principal, id, await readJson(c.req, LIMITS.single), ifMatch, writeCtx(c, key));
   return storedToResponse(r, c.requestId);
 }
 

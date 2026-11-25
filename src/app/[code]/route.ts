@@ -40,7 +40,7 @@ async function resolve(req: Request, code: string): Promise<Response> {
       `select exists(select 1 from bzup.service_domains where hostname = $1 and status = 'active') as host_ok,
               l.id, l.destination_url, l.status
          from (select 1) x
-         left join bzup.links l on l.short_code = $2`,
+         left join bzup.links l on l.short_code = $2 and l.deleted_at is null`,
       [host ?? '', code],
     );
     const r = rows[0];

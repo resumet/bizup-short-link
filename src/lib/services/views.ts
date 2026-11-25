@@ -19,7 +19,7 @@ export interface DailyViews {
 export async function getDailyViews(q: Queryable, p: Principal, linkId: string, days = 30): Promise<DailyViews> {
   requirePermission(p, 'links:read');
   if (!Number.isInteger(days) || days < 1 || days > 366) throw new AppError('VALIDATION_ERROR', 'days는 1~366 사이여야 합니다.');
-  const own = await q.query(`select 1 from bzup.links where workspace_id = $1 and id = $2`, [p.workspaceId, linkId]);
+  const own = await q.query(`select 1 from bzup.links where workspace_id = $1 and id = $2 and deleted_at is null`, [p.workspaceId, linkId]);
   if (!own.length) throw new AppError('NOT_FOUND');
   const rows = await q.query<{ date: string; views: number }>(
     `with today as (select (now() at time zone 'Asia/Seoul')::date as d)

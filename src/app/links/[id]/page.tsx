@@ -8,6 +8,7 @@ import { UUID_RE } from '@/lib/validation';
 import { formatKst } from '@/lib/time';
 import { AccessDenied, StatusPill, TopBar } from '@/components/TopBar';
 import { LinkEditor } from '@/components/LinkEditor';
+import { LinkDangerZone } from '@/components/LinkDangerZone';
 import { CopyButton } from '@/components/CopyButton';
 import { ViewsChart } from '@/components/ViewsChart';
 import { SlotSwitcher } from '@/components/SlotSwitcher';
@@ -116,7 +117,7 @@ export default async function LinkDetailPage({ params }: { params: Promise<{ id:
             {revisions.map((r) => (
               <tr key={r.version}>
                 <td>{r.version}</td>
-                <td>{r.action === 'created' ? '생성' : '수정'}</td>
+                <td>{r.action === 'created' ? '생성' : r.action === 'deleted' ? '삭제' : '수정'}</td>
                 <td>
                   {r.action === 'created'
                     ? `${describe('destination_url', r.after as Snap)} · ${describe('course_id', r.after as Snap)}`
@@ -134,6 +135,10 @@ export default async function LinkDetailPage({ params }: { params: Promise<{ id:
           </tbody>
         </table>
         </div>
+
+        {me.role !== 'viewer' && (
+          <LinkDangerZone linkId={link.id} name={link.name} shortUrl={link.short_url} etag={loaded.etag} totalViews={views.total_views} />
+        )}
       </main>
     </div>
   );
