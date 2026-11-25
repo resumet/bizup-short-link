@@ -3,7 +3,7 @@ import { json, LIMITS, readJson, storedToResponse } from '@/lib/http';
 import { requireSingleIfMatch } from '@/lib/etag';
 import { assertUuidPath } from '@/lib/validation';
 import { requireIdempotencyKey } from '@/lib/services/idempotency';
-import { createCourse, listCoursesForAdmin, updateCourse } from '@/lib/services/courses';
+import { createCourse, importCourses, listCoursesForAdmin, updateCourse } from '@/lib/services/courses';
 import { getTemplateForAdmin, saveTemplate } from '@/lib/services/template';
 import { getSystemApiStatus, issueSystemKey, revokeSystemKey, updateSystemClient } from '@/lib/services/system-api-key';
 import { inviteEmployee, listEmployees, resendInvitation, updateEmployee } from '@/lib/services/employees';
@@ -30,6 +30,12 @@ export async function handleAdminUpdateCourse(c: Ctx) {
   const ifMatch = requireSingleIfMatch(c.req.headers.get('if-match'));
   const body = await readJson(c.req, LIMITS.single);
   return storedToResponse(await updateCourse(c.db, c.principal, id, body, ifMatch, key, c.requestId), c.requestId);
+}
+
+export async function handleAdminImportCourses(c: Ctx) {
+  const key = requireIdempotencyKey(c.req.headers.get('idempotency-key'));
+  const body = await readJson(c.req, LIMITS.edit);
+  return storedToResponse(await importCourses(c.db, c.principal, body, key, c.requestId), c.requestId);
 }
 
 export async function handleAdminGetTemplate(c: Ctx) {

@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 import { setupDb } from './helpers/db';
 import { AppError } from '@/lib/errors';
-import { createCourse, updateCourse, listCoursesForAdmin } from '@/lib/services/courses';
+import { createCourse, importCourses, updateCourse, listCoursesForAdmin } from '@/lib/services/courses';
 import { getTemplateForAdmin, saveTemplate } from '@/lib/services/template';
 import { createBatch, parseBatchCreateBody } from '@/lib/services/links';
 import type { UserPrincipal } from '@/lib/auth/principal';
@@ -115,5 +115,32 @@ describe('자동생성 이름 목록 (AC-39~AC-42, AC-47)', () => {
   it('editor 는 원본 목록 수정 불가', async () => {
     const t0 = await getTemplateForAdmin(env.db, owner);
     expect(await code(saveTemplate(env.db, editor, { items: [] }, t0.etag, k(), 'r'))).toBe('INSUFFICIENT_PERMISSION');
+  });
+});
+
+describe('강의 정보: 기수·웨비나 일정, 외부 강의 가져오기', () => {
+  it('등록·수정에 기수·웨비나 일정 저장', async () => {
+    const r = await createCourse(env.db, owner, { name: 'AI 수익화 클래스', instructor_name: '홍길동', cohort: '1', webinar_at: '2026-12-01T10:30:00+00:00' }, k(), 'r');
+    const c = (r.body as { data: { id: string; cohort: string; webinar_at: string; source: string } }).data;
+    expect(c).toMatchObject({ cohort: '1', webinar_at: '2026-12-01T10:30:00Z', source: 'manual' });
+    const u = await updateCourse(env.db, owner, c.id, { cohort: '2', webinar_at: null }, r.headers.ETag, k(), 'r');
+    expect((u.body as { data: object; changed_fields: string[] })).toMatchObject({ data: { cohort: '2', webinar_at: null }, changed_fields: ['cohort', 'webinar_at'] });
+    expect(await code(createCourse(env.db, owner, { name: 'x', webinar_at: '어제' }, k(), 'r'))).toBe('VALIDATION_ERROR');
+  });
+
+  it('외부 UUID 를 id 로 추가, 이미 추가된 UUID 는 건너뜀', async () => {
+    const A = crypto.randomUUID();
+    const B = crypto.randomUUID();
+    const item = (id: string, name: string) => ({ id, name, instructor_name: '홍길동', cohort: '1', webinar_at: '2026-12-01T10:30:00+00:00' });
+    const r1 = await importCourses(env.db, owner, { courses: [item(A, 'A 강의')] }, k(), 'r');
+    expect((r1.body as { data: object }).data).toEqual({ added: [A], skipped: [] });
+    const r2 = await importCourses(env.db, owner, { courses: [item(A, 'A 강의 (이름 바뀜)'), item(B, 'B 강의')] }, k(), 'r');
+    expect((r2.body as { data: object }).data).toEqual({ added: [B], skipped: [A] });
+    const list = await listCoursesForAdmin(env.db, owner.workspaceId);
+    expect(list).toHaveLength(2);
+    expect(list.find((c) => c.id === A)).toMatchObject({ name: 'A 강의', source: 'dashboard', cohort: '1', status: 'active' });
+    // 같은 요청 안 중복, editor 거절
+    expect(await code(importCourses(env.db, owner, { courses: [item(A, 'a'), item(A, 'a')] }, k(), 'r'))).toBe('VALIDATION_ERROR');
+    expect(await code(importCourses(env.db, editor, { courses: [item(crypto.randomUUID(), 'c')] }, k(), 'r'))).toBe('INSUFFICIENT_PERMISSION');
   });
 });
