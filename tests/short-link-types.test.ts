@@ -4,6 +4,7 @@ import { setupDb } from './helpers/db';
 import { AppError } from '@/lib/errors';
 import type { ApiPrincipal, UserPrincipal } from '@/lib/auth/principal';
 import { createTypedShortLink, listShortLinkTypes } from '@/lib/services/short-links';
+import { createLinkType, deleteLinkType, listLinkTypesForAdmin, updateLinkType } from '@/lib/services/link-types-admin';
 
 type Env = Awaited<ReturnType<typeof setupDb>>;
 let env: Env;
@@ -41,6 +42,7 @@ describe('유형 조회', () => {
 
   it('key 는 변경·삭제 불가, label 변경과 비활성화는 가능', async () => {
     await expect(env.db.query(`update bzup.short_link_types set key = 'pay' where key = 'payment'`)).rejects.toThrow();
+    await createTypedShortLink(env.db, api, body(), ctx());
     await expect(env.db.query(`delete from bzup.short_link_types where key = 'payment'`)).rejects.toThrow();
     await expect(env.db.query(`insert into bzup.short_link_types (key, label) values ('Bad', 'x')`)).rejects.toThrow();
     await env.db.query(`update bzup.short_link_types set label = '결제 QR', active = false where key = 'payment'`);
@@ -138,5 +140,25 @@ describe('멱등성', () => {
     expect(c.n).toBe(1);
     // 키 없이 다시 보내면 409 로 기존 링크
     expect((await err(createTypedShortLink(env.db, api, b, ctx()))).code).toBe('LINK_TYPE_EXISTS');
+  });
+});
+
+describe('유형 관리 (최고관리자)', () => {
+  it('추가·이름 수정·비활성화, 쓰인 유형은 제거 불가, 안 쓰인 유형은 제거', async () => {
+    const k = () => crypto.randomUUID();
+    const c = await createLinkType(env.db, owner, { key: 'replay', label: '다시보기 QR' }, k(), 'r');
+    expect(c.status).toBe(201);
+    expect((await err(createLinkType(env.db, owner, { key: 'replay', label: 'x' }, k(), 'r'))).code).toBe('CONFLICT');
+    expect((await err(createLinkType(env.db, owner, { key: 'Bad', label: 'x' }, k(), 'r'))).code).toBe('VALIDATION_ERROR');
+    await updateLinkType(env.db, owner, 'replay', { label: '다시보기', active: false }, k(), 'r');
+    expect((await listLinkTypesForAdmin(env.db)).find((t) => t.key === 'replay')).toMatchObject({ label: '다시보기', active: false, used: false });
+
+    await createTypedShortLink(env.db, api, body({ type_key: 'landing' }), ctx());
+    expect((await err(deleteLinkType(env.db, owner, 'landing', k(), 'r'))).code).toBe('CONFLICT');
+    await deleteLinkType(env.db, owner, 'replay', k(), 'r');
+    expect((await listLinkTypesForAdmin(env.db)).map((t) => t.key)).toEqual(['landing', 'payment']);
+
+    const editor = await env.addUser('editor');
+    expect((await err(createLinkType(env.db, editor, { key: 'x', label: 'x' }, k(), 'r'))).code).toBe('INSUFFICIENT_PERMISSION');
   });
 });

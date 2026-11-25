@@ -9,6 +9,7 @@ import { getSystemApiStatus, issueSystemKey, revokeSystemKey } from '@/lib/servi
 import { inviteEmployee, listEmployees, resendInvitation, updateEmployee } from '@/lib/services/employees';
 import { loadUrlPolicy, originFor } from '@/lib/services/settings';
 import { authDirectory } from '@/lib/auth/directory';
+import { createLinkType, deleteLinkType, listLinkTypesForAdmin, updateLinkType } from '@/lib/services/link-types-admin';
 import type { HandlerCtx } from '@/lib/route';
 import type { UserPrincipal } from '@/lib/auth/principal';
 
@@ -102,4 +103,29 @@ export async function handleUpdateEmployee(c: Ctx) {
   const ifMatch = requireSingleIfMatch(c.req.headers.get('if-match'));
   const body = await readJson(c.req, LIMITS.single);
   return storedToResponse(await updateEmployee(c.db, c.principal, id, body, ifMatch, key, c.requestId), c.requestId);
+}
+
+// ---------------------------------------------------------------------------
+// 짧은 주소 유형 관리
+// ---------------------------------------------------------------------------
+
+export async function handleListLinkTypes(c: Ctx) {
+  return json({ data: await listLinkTypesForAdmin(c.db) }, 200, c.requestId);
+}
+
+export async function handleCreateLinkType(c: Ctx) {
+  const key = requireIdempotencyKey(c.req.headers.get('idempotency-key'));
+  const body = await readJson(c.req, LIMITS.single);
+  return storedToResponse(await createLinkType(c.db, c.principal, body, key, c.requestId), c.requestId);
+}
+
+export async function handleUpdateLinkType(c: Ctx) {
+  const key = requireIdempotencyKey(c.req.headers.get('idempotency-key'));
+  const body = await readJson(c.req, LIMITS.single);
+  return storedToResponse(await updateLinkType(c.db, c.principal, c.params.key, body, key, c.requestId), c.requestId);
+}
+
+export async function handleDeleteLinkType(c: Ctx) {
+  const key = requireIdempotencyKey(c.req.headers.get('idempotency-key'));
+  return storedToResponse(await deleteLinkType(c.db, c.principal, c.params.key, key, c.requestId), c.requestId);
 }

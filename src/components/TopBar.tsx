@@ -16,6 +16,7 @@ export function TopBar({ me, active }: { me: UserPrincipal; active?: string }) {
           <>
             <Link href="/admin/courses" className={cls('courses')} aria-current={current('courses')}>강의 관리</Link>
             <Link href="/admin/generation-template" className={cls('template')} aria-current={current('template')}>자동생성 이름 목록</Link>
+            <Link href="/admin/link-types" className={cls('linktypes')} aria-current={current('linktypes')}>유형 관리</Link>
             <Link href="/admin/employees" className={cls('employees')} aria-current={current('employees')}>직원 관리</Link>
             <Link href="/admin/api-key" className={cls('apikey')} aria-current={current('apikey')}>API 키</Link>
           </>
