@@ -10,7 +10,7 @@ interface KeyMeta {
   last_used_at: string | null; revoked_at: string | null; revoke_reason: string | null;
 }
 interface Status {
-  client: { id: string; name: string; default_course_id: string | null; version: number } | null;
+  client: { id: string; name: string; version: number } | null;
   etag: string | null;
   keys: KeyMeta[];
   history: KeyMeta[];
@@ -29,8 +29,8 @@ function daysLeft(iso: string) {
   return Math.ceil((new Date(iso).getTime() - Date.now()) / 86_400_000);
 }
 
-export function ApiKeyAdmin({ initial, courses, origin }: {
-  initial: Status; courses: { id: string; name: string }[]; origin: string;
+export function ApiKeyAdmin({ initial, origin }: {
+  initial: Status; origin: string;
 }) {
   const router = useRouter();
   const s = initial;
@@ -41,7 +41,6 @@ export function ApiKeyAdmin({ initial, courses, origin }: {
   const [revealed, setRevealed] = useState<{ key: string; meta: KeyMeta } | null>(null);
   const [revoking, setRevoking] = useState<KeyMeta | null>(null);
   const [reason, setReason] = useState('');
-  const [course, setCourse] = useState(s.client?.default_course_id ?? '');
   const issueAttempt = useRef<{ sig: string; key: string } | null>(null);
 
   const hasKey = s.keys.some((k) => k.effective_status === 'active');
@@ -92,21 +91,6 @@ export function ApiKeyAdmin({ initial, courses, origin }: {
     }
   }
 
-  async function saveCourse() {
-    if (!s.etag) return;
-    setBusy(true);
-    try {
-      await apiFetch('/internal/admin/api-key', {
-        method: 'PATCH', body: { default_course_id: course || null }, ifMatch: s.etag, idempotencyKey: newIdempotencyKey(),
-      });
-      setMsg({ kind: 'ok', text: '기본 강의를 저장했습니다.' });
-      router.refresh();
-    } catch (e) {
-      setMsg({ kind: 'error', text: e instanceof ApiError ? e.message : '저장하지 못했습니다.' });
-    } finally {
-      setBusy(false);
-    }
-  }
 
   return (
     <>
@@ -179,18 +163,6 @@ export function ApiKeyAdmin({ initial, courses, origin }: {
         </div>
       )}
 
-      <h2>API 기본 강의</h2>
-      <div className="card">
-        <p className="muted small" style={{ marginTop: 0 }}>API 요청에 course_id가 없으면 이 강의로 생성합니다. 지정하지 않으면 course_id가 필수입니다.</p>
-        <div className="row">
-          <select value={course} onChange={(e) => setCourse(e.target.value)} disabled={!s.client}>
-            <option value="">지정 안 함 (course_id 필수)</option>
-            {courses.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
-          </select>
-          <button className="button secondary" type="button" disabled={busy || !s.client || course === (s.client?.default_course_id ?? '')} onClick={() => void saveCourse()}>저장</button>
-        </div>
-        {!s.client && <p className="muted small">키를 처음 발급하면 설정할 수 있습니다.</p>}
-      </div>
 
       <h2>호출 방법</h2>
       <div className="card">
@@ -204,7 +176,12 @@ curl -X POST ${origin}/api/v1/links \\
   -H "Authorization: Bearer $BZUP_API_KEY" \\
   -H "Content-Type: application/json" \\
   -H "Idempotency-Key: $(uuidgen)" \\
-  -d '{"name":"웨비나 안내","destination_url":"https://example.com/webinar"}'`}</pre>
+  -d '{"course_id":"강의 UUID","name":"웨비나 안내","destination_url":"https://example.com/webinar"}'
+
+# 강의 UUID 목록
+curl ${origin}/api/v1/courses \\
+  -H "Authorization: Bearer $BZUP_API_KEY"`}</pre>
+        <p className="muted small">짧은 주소 생성·사전 확인·자동생성 요청에는 <code>course_id</code>(강의 관리의 UUID)가 반드시 필요합니다.</p>
       </div>
 
       {s.history.length > 0 && (

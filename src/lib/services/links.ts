@@ -323,10 +323,12 @@ async function reserveCodes(db: Db, policy: UrlPolicy, workspaceId: string, rows
   await Promise.all(Array.from({ length: Math.min(CONCURRENCY, rows.length) }, worker));
 }
 
+/** 강의는 모든 생성 요청에 강의 UUID(course_id)로 지정한다. API 기본 강의는 없다. */
 function resolveCourseId(p: Principal, requested: string | null): string {
   if (requested) return requested;
-  if (p.kind === 'api_client' && p.defaultCourseId) return p.defaultCourseId;
-  throw new AppError('COURSE_REQUIRED');
+  throw p.kind === 'api_client'
+    ? new AppError('COURSE_REQUIRED', 'course_id(강의 UUID)를 포함해 주세요.')
+    : new AppError('COURSE_REQUIRED');
 }
 
 async function checkExternalRefs(q: Queryable, workspaceId: string, rows: PlannedRow[]) {

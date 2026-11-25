@@ -11,7 +11,7 @@ import type { Db, Queryable } from '@/lib/db/types';
 import { lockRequestScope, lockWorkspace } from '@/lib/db/locks';
 import { API_SCOPES, recheckPrincipal, type UserPrincipal } from '@/lib/auth/principal';
 import { serviceKeyEnvironment } from '@/lib/auth/api-key';
-import { assertAllowedFields, isObject, optionalText, uuidField } from '@/lib/validation';
+import { assertAllowedFields, isObject, optionalText } from '@/lib/validation';
 import { audit, runAdminWrite } from './admin-write';
 import { consume, limits } from './ratelimit';
 
@@ -57,8 +57,8 @@ export function keyMeta(k: KeyRow) {
 }
 
 async function findSystemClient(q: Queryable, workspaceId: string) {
-  const [c] = await q.query<{ id: string; default_course_id: string | null; version: number; status: string; name: string }>(
-    `select id, default_course_id, version, status, name from bzup.api_clients
+  const [c] = await q.query<{ id: string; version: number; status: string; name: string }>(
+    `select id, version, status, name from bzup.api_clients
       where workspace_id = $1 and is_system and status <> 'deleted'`,
     [workspaceId],
   );
@@ -68,10 +68,10 @@ async function findSystemClient(q: Queryable, workspaceId: string) {
 async function ensureSystemClient(q: Queryable, owner: UserPrincipal) {
   const existing = await findSystemClient(q, owner.workspaceId);
   if (existing) return existing;
-  const [c] = await q.query<{ id: string; default_course_id: string | null; version: number; status: string; name: string }>(
+  const [c] = await q.query<{ id: string; version: number; status: string; name: string }>(
     `insert into bzup.api_clients (workspace_id, name, status, is_system, created_by, updated_by)
      values ($1, $2, 'active', true, $3, $3)
-     returning id, default_course_id, version, status, name`,
+     returning id, version, status, name`,
     [owner.workspaceId, SYSTEM_CLIENT_NAME, owner.userId],
   );
   await audit(q, owner, { objectType: 'api_client', objectId: c.id, action: 'api_client_created', after: { name: c.name, is_system: true } });
@@ -99,7 +99,7 @@ export async function getSystemApiStatus(db: Db, owner: UserPrincipal) {
   );
   const metas = keys.map(keyMeta);
   return {
-    client: { id: client.id, name: client.name, default_course_id: client.default_course_id, version: Number(client.version) },
+    client: { id: client.id, name: client.name, version: Number(client.version) },
     etag: clientEtag(client.id, Number(client.version)),
     keys: metas.filter((k) => ['active', 'rotating', 'suspended'].includes(k.effective_status)),
     history: metas.filter((k) => !['active', 'rotating', 'suspended'].includes(k.effective_status)).slice(0, 10),
@@ -274,43 +274,3 @@ export async function revokeSystemKey(db: Db, owner: UserPrincipal, keyId: strin
   });
 }
 
-// ---------------------------------------------------------------------------
-// 기본 강의 (§13.4)
-// ---------------------------------------------------------------------------
-export async function updateSystemClient(db: Db, owner: UserPrincipal, body: unknown, ifMatch: string, idempotencyKey: string, requestId: string) {
-  if (!isObject(body)) throw new AppError('INVALID_JSON');
-  assertAllowedFields(body, ['default_course_id']);
-  if (!('default_course_id' in body)) throw validationError('default_course_id가 필요합니다.');
-  const courseId = body.default_course_id === null ? null : uuidField(body.default_course_id, 'default_course_id');
-  return runAdminWrite(db, owner, {
-    method: 'PATCH', route: '/admin/api-key', idempotencyKey, hashInput: { body, if_match: ifMatch }, resultObjectType: 'api_client',
-  }, async (q, cur) => {
-    const client = await ensureSystemClient(q, cur);
-    const etag = clientEtag(client.id, Number(client.version));
-    if (ifMatch !== etag) throw new AppError('PRECONDITION_FAILED', undefined, { headers: { ETag: etag } });
-    if (courseId) {
-      const [c] = await q.query<{ status: string }>(`select status from bzup.courses where workspace_id = $1 and id = $2`, [cur.workspaceId, courseId]);
-      if (!c) throw new AppError('COURSE_REQUIRED', '선택한 강의를 찾을 수 없습니다.');
-      if (c.status !== 'active') throw new AppError('COURSE_NOT_ACTIVE');
-    }
-    let version = Number(client.version);
-    if (courseId !== client.default_course_id) {
-      const [u] = await q.query<{ version: number }>(
-        `update bzup.api_clients set default_course_id=$2, version=version+1, updated_by=$3, updated_at=clock_timestamp()
-          where id=$1 returning version`,
-        [client.id, courseId, cur.userId],
-      );
-      version = Number(u.version);
-      await audit(q, cur, {
-        objectType: 'api_client', objectId: client.id, action: 'api_client_default_course_changed',
-        before: { default_course_id: client.default_course_id }, after: { default_course_id: courseId }, requestId,
-      });
-    }
-    return {
-      status: 200,
-      body: { data: { id: client.id, default_course_id: courseId, version } },
-      headers: { ETag: clientEtag(client.id, version) },
-      objectId: client.id,
-    };
-  });
-}

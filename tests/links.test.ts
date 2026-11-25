@@ -175,8 +175,8 @@ describe('같은 목적지 재생성 확인 (AC-26~AC-38)', () => {
 
   it('read 없는 create 키에는 기존 링크 정보를 노출하지 않는다 (AC-38)', async () => {
     await create(editor, { course_id: courseA, name: '비공개 이름', destination_url: url });
-    const { principal } = await env.addApiKey(owner, ['links:create'], courseA);
-    const e = await err(create(principal, { name: 'api', destination_url: url }));
+    const { principal } = await env.addApiKey(owner, ['links:create']);
+    const e = await err(create(principal, { course_id: courseA, name: 'api', destination_url: url }));
     expect(e.code).toBe('DUPLICATE_DESTINATION');
     const g = (e.details as { duplicate_groups: Record<string, unknown>[] }).duplicate_groups[0];
     expect(g.existing_count).toBe(1);
@@ -184,16 +184,18 @@ describe('같은 목적지 재생성 확인 (AC-26~AC-38)', () => {
     expect(JSON.stringify(e.details)).not.toContain('비공개 이름');
   });
 
-  it('API 기본 강의로 생성 (AC-74)', async () => {
-    const { principal } = await env.addApiKey(owner, ['links:create'], courseB);
-    const r = await create(principal, { name: 'api', destination_url: 'https://api.example.com/' });
+  it('API 는 course_id(강의 UUID) 필수, 지정한 강의로 생성', async () => {
+    const { principal } = await env.addApiKey(owner, ['links:create']);
+    const e = await err(create(principal, { name: 'api', destination_url: 'https://api.example.com/' }));
+    expect(e.code).toBe('COURSE_REQUIRED');
+    const r = await create(principal, { course_id: courseB, name: 'api', destination_url: 'https://api.example.com/' });
     expect((r.body as { data: { course_id: string; source: string } }).data).toMatchObject({ course_id: courseB, source: 'api' });
   });
 
   it('폐기된 키는 잠금 후 재검사에서 거절 (AC-121)', async () => {
-    const { principal, keyId } = await env.addApiKey(owner, ['links:create'], courseB);
+    const { principal, keyId } = await env.addApiKey(owner, ['links:create']);
     await env.db.query(`update bzup.api_keys set scheduled_revoke_at = now() - interval '1 second' where id = $1`, [keyId]);
-    expect((await err(create(principal, { name: 'api', destination_url: 'https://api.example.com/' }))).code).toBe('INVALID_API_KEY');
+    expect((await err(create(principal, { course_id: courseB, name: 'api', destination_url: 'https://api.example.com/' }))).code).toBe('INVALID_API_KEY');
   });
 });
 

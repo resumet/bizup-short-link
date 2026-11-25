@@ -23,7 +23,6 @@ export async function GET(req: Request) {
           scopes: p.scopes,
           expires_at: toIso(p.expiresAt),
           scheduled_revoke_at: toIso(p.scheduledRevokeAt),
-          default_course_id: p.defaultCourseId,
         },
       },
       200,

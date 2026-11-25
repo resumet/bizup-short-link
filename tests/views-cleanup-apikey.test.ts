@@ -5,7 +5,7 @@ import { createSingleLink, parseSingleCreateBody } from '@/lib/services/links';
 import { listLinks } from '@/lib/services/link-query';
 import { getDailyViews, recordView } from '@/lib/services/views';
 import { cleanupExpired } from '@/lib/services/cleanup';
-import { getSystemApiStatus, issueSystemKey, revokeSystemKey, updateSystemClient } from '@/lib/services/system-api-key';
+import { getSystemApiStatus, issueSystemKey, revokeSystemKey } from '@/lib/services/system-api-key';
 import { authenticateApiKey } from '@/lib/auth/api-key';
 import type { UserPrincipal } from '@/lib/auth/principal';
 
@@ -148,12 +148,7 @@ describe('시스템 API 키', () => {
     expect((await env.db.query(`select count(*)::int as n from bzup.links where source = 'api'`))[0]).toEqual({ n: 1 });
   });
 
-  it('기본 강의 설정과 권한', async () => {
-    await issueSystemKey(env.db, owner, {}, k(), 'r');
-    const s = await getSystemApiStatus(env.db, owner);
-    const r = await updateSystemClient(env.db, owner, { default_course_id: course }, s.etag!, k(), 'r');
-    expect((r.body as { data: { default_course_id: string } }).data.default_course_id).toBe(course);
-    expect(await code(updateSystemClient(env.db, owner, { default_course_id: null }, s.etag!, k(), 'r'))).toBe('PRECONDITION_FAILED');
+  it('API 키 관리 권한', async () => {
     expect(await code(issueSystemKey(env.db, editor, {}, k(), 'r'))).toBe('INSUFFICIENT_PERMISSION');
     expect(await code(getSystemApiStatus(env.db, editor))).toBe('INSUFFICIENT_PERMISSION');
   });

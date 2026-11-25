@@ -46,11 +46,11 @@ export async function setupDb() {
     return c.id;
   }
 
-  async function addApiKey(owner: UserPrincipal, scopes: ApiScope[], defaultCourseId: string | null = null) {
+  async function addApiKey(owner: UserPrincipal, scopes: ApiScope[]) {
     const [client] = await db.query<{ id: string }>(
-      `insert into bzup.api_clients (workspace_id, name, status, default_course_id, created_by)
-       values ($1,'수강 신청 자동화','active',$2,$3) returning id`,
-      [workspaceId, defaultCourseId, owner.userId],
+      `insert into bzup.api_clients (workspace_id, name, status, created_by)
+       values ($1,'수강 신청 자동화','active',$2) returning id`,
+      [workspaceId, owner.userId],
     );
     const k = generateApiKey('live');
     const [key] = await db.query<{ id: string }>(
@@ -61,7 +61,7 @@ export async function setupDb() {
     );
     const principal: ApiPrincipal = {
       kind: 'api_client', workspaceId, apiClientId: client.id, apiKeyId: key.id, scopes,
-      clientName: '수강 신청 자동화', defaultCourseId,
+      clientName: '수강 신청 자동화',
     };
     return { principal, plaintext: k.plaintext, clientId: client.id, keyId: key.id };
   }

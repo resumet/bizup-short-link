@@ -22,7 +22,6 @@ export interface ApiPrincipal {
   apiKeyId: string;
   scopes: ApiScope[];
   clientName: string;
-  defaultCourseId: string | null;
 }
 
 export type Principal = UserPrincipal | ApiPrincipal;
@@ -79,8 +78,8 @@ export async function recheckPrincipal<P extends Principal>(q: Queryable, p: P, 
     if (perm) requirePermission(next, perm);
     return next;
   }
-  const rows = await q.query<{ scopes: string[]; valid: boolean; default_course_id: string | null; client_name: string }>(
-    `select k.scopes, c.default_course_id, c.name as client_name,
+  const rows = await q.query<{ scopes: string[]; valid: boolean; client_name: string }>(
+    `select k.scopes, c.name as client_name,
             (k.status = 'active' and k.deleted_at is null and k.secret_hash is not null
              and c.status = 'active'
              and clock_timestamp() < k.expires_at
@@ -95,7 +94,6 @@ export async function recheckPrincipal<P extends Principal>(q: Queryable, p: P, 
   const next = {
     ...p,
     scopes: k.scopes as ApiScope[],
-    defaultCourseId: k.default_course_id,
     clientName: k.client_name,
   } as P;
   if (perm) requirePermission(next, perm);

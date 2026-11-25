@@ -24,10 +24,10 @@ export async function authenticateApiKey(db: Db, authorization: string | null): 
     rows = await db.query<{
       id: string; workspace_id: string; api_client_id: string; name: string; scopes: string[];
       secret_hash: Uint8Array | null; expires_at: Date; scheduled_revoke_at: Date | null;
-      client_name: string; default_course_id: string | null; valid: boolean; environment: string;
+      client_name: string; valid: boolean; environment: string;
     }>(
       `select k.id, k.workspace_id, k.api_client_id, k.name, k.scopes, k.secret_hash, k.expires_at,
-              k.scheduled_revoke_at, k.environment, c.name as client_name, c.default_course_id,
+              k.scheduled_revoke_at, k.environment, c.name as client_name,
               (k.status = 'active' and k.deleted_at is null and c.status = 'active'
                and clock_timestamp() < k.expires_at
                and (k.scheduled_revoke_at is null or clock_timestamp() < k.scheduled_revoke_at)) as valid
@@ -58,7 +58,6 @@ export async function authenticateApiKey(db: Db, authorization: string | null): 
     apiKeyId: k.id,
     scopes: k.scopes as ApiScope[],
     clientName: k.client_name,
-    defaultCourseId: k.default_course_id,
     keyName: k.name,
     expiresAt: k.expires_at,
     scheduledRevokeAt: k.scheduled_revoke_at,

@@ -5,7 +5,7 @@ import { assertUuidPath } from '@/lib/validation';
 import { requireIdempotencyKey } from '@/lib/services/idempotency';
 import { createCourse, importCourses, listCoursesForAdmin, updateCourse } from '@/lib/services/courses';
 import { getTemplateForAdmin, saveTemplate } from '@/lib/services/template';
-import { getSystemApiStatus, issueSystemKey, revokeSystemKey, updateSystemClient } from '@/lib/services/system-api-key';
+import { getSystemApiStatus, issueSystemKey, revokeSystemKey } from '@/lib/services/system-api-key';
 import { inviteEmployee, listEmployees, resendInvitation, updateEmployee } from '@/lib/services/employees';
 import { loadUrlPolicy, originFor } from '@/lib/services/settings';
 import { authDirectory } from '@/lib/auth/directory';
@@ -74,12 +74,6 @@ export async function handleApiKeyRevoke(c: Ctx) {
   return storedToResponse(await revokeSystemKey(c.db, c.principal, id, body, key, c.requestId), c.requestId);
 }
 
-export async function handleApiKeySettings(c: Ctx) {
-  const key = requireIdempotencyKey(c.req.headers.get('idempotency-key'));
-  const ifMatch = requireSingleIfMatch(c.req.headers.get('if-match'));
-  const body = await readJson(c.req, LIMITS.single);
-  return storedToResponse(await updateSystemClient(c.db, c.principal, body, ifMatch, key, c.requestId), c.requestId);
-}
 
 // ---------------------------------------------------------------------------
 // 직원 관리 (§3.3~§3.6)
