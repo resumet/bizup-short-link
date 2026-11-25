@@ -3,6 +3,7 @@ import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { apiFetch, ApiError, formatKst, newIdempotencyKey } from '@/lib/client/api';
 import { StatusPillClient } from './StatusPillClient';
+import { CourseImportButton } from './CourseImportDialog';
 
 interface Course {
   id: string; name: string; instructor_name: string | null; memo: string | null; status: 'active' | 'closed';
@@ -56,7 +57,10 @@ export function CoursesAdmin({ courses }: { courses: Course[] }) {
   return (
     <>
       <form className="card form inline-form" onSubmit={(e) => { e.preventDefault(); void create(); }}>
-        <h2>강의 등록</h2>
+        <div className="row" style={{ justifyContent: 'space-between', alignItems: 'center' }}>
+          <h2 style={{ margin: 0 }}>강의 등록</h2>
+          <CourseImportButton existingNames={courses.map((c) => c.name)} />
+        </div>
         <div className="row">
           <label>강의명 <input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} maxLength={120} required /></label>
           <label>강사명 <input value={form.instructor_name} onChange={(e) => setForm({ ...form, instructor_name: e.target.value })} maxLength={80} /></label>
