@@ -6,6 +6,9 @@ import { requireIdempotencyKey } from '@/lib/services/idempotency';
 import { createCourse, listCoursesForAdmin, updateCourse } from '@/lib/services/courses';
 import { getTemplateForAdmin, saveTemplate } from '@/lib/services/template';
 import { getSystemApiStatus, issueSystemKey, revokeSystemKey, updateSystemClient } from '@/lib/services/system-api-key';
+import { inviteEmployee, listEmployees, resendInvitation, updateEmployee } from '@/lib/services/employees';
+import { loadUrlPolicy, originFor } from '@/lib/services/settings';
+import { authDirectory } from '@/lib/auth/directory';
 import type { HandlerCtx } from '@/lib/route';
 import type { UserPrincipal } from '@/lib/auth/principal';
 
@@ -70,4 +73,38 @@ export async function handleApiKeySettings(c: Ctx) {
   const ifMatch = requireSingleIfMatch(c.req.headers.get('if-match'));
   const body = await readJson(c.req, LIMITS.single);
   return storedToResponse(await updateSystemClient(c.db, c.principal, body, ifMatch, key, c.requestId), c.requestId);
+}
+
+// ---------------------------------------------------------------------------
+// 직원 관리 (§3.3~§3.6)
+// ---------------------------------------------------------------------------
+
+async function inviteCtx(c: Ctx) {
+  const policy = await loadUrlPolicy(c.db);
+  // 초대 메일 링크 → /auth/confirm (token_hash 검증) → 초기 설정 화면
+  return { redirectTo: `${originFor(policy.primaryHost)}/auth/confirm?next=/account/setup`, requestId: c.requestId };
+}
+
+export async function handleListEmployees(c: Ctx) {
+  return json({ data: await listEmployees(c.db, c.principal, authDirectory(c.db)) }, 200, c.requestId);
+}
+
+export async function handleInviteEmployee(c: Ctx) {
+  const body = await readJson(c.req, LIMITS.single);
+  const r = await inviteEmployee(c.db, c.principal, body, authDirectory(c.db), await inviteCtx(c));
+  return json(r.body, r.status, c.requestId);
+}
+
+export async function handleResendInvitation(c: Ctx) {
+  const id = assertUuidPath(c.params.id);
+  const r = await resendInvitation(c.db, c.principal, id, authDirectory(c.db), await inviteCtx(c));
+  return json(r.body, 200, c.requestId);
+}
+
+export async function handleUpdateEmployee(c: Ctx) {
+  const id = assertUuidPath(c.params.id);
+  const key = requireIdempotencyKey(c.req.headers.get('idempotency-key'));
+  const ifMatch = requireSingleIfMatch(c.req.headers.get('if-match'));
+  const body = await readJson(c.req, LIMITS.single);
+  return storedToResponse(await updateEmployee(c.db, c.principal, id, body, ifMatch, key, c.requestId), c.requestId);
 }

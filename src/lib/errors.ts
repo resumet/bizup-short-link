@@ -23,6 +23,8 @@ export type ErrorCode =
   | 'IDEMPOTENCY_IN_PROGRESS'
   | 'EXTERNAL_REF_EXISTS'
   | 'LAST_OWNER_REQUIRED'
+  | 'EMPLOYEE_EXISTS'
+  | 'INVITE_DELIVERY_FAILED'
   | 'API_KEY_LIMIT_EXCEEDED'
   | 'API_KEY_STATE_CONFLICT'
   | 'API_CLIENT_STATE_CONFLICT'
@@ -71,6 +73,8 @@ const DEFAULT_STATUS: Record<ErrorCode, number> = {
   IDEMPOTENCY_IN_PROGRESS: 409,
   EXTERNAL_REF_EXISTS: 409,
   LAST_OWNER_REQUIRED: 409,
+  EMPLOYEE_EXISTS: 409,
+  INVITE_DELIVERY_FAILED: 502,
   API_KEY_LIMIT_EXCEEDED: 409,
   API_KEY_STATE_CONFLICT: 409,
   API_CLIENT_STATE_CONFLICT: 409,
@@ -129,6 +133,8 @@ const DEFAULT_MESSAGE: Partial<Record<ErrorCode, string>> = {
   INVALID_JSON: '요청 본문이 올바른 JSON이 아닙니다.',
   INVALID_IF_MATCH: 'If-Match 형식이 올바르지 않습니다.',
   CSRF_REJECTED: '요청 출처를 확인할 수 없습니다.',
+  EMPLOYEE_EXISTS: '이미 등록된 직원입니다.',
+  INVITE_DELIVERY_FAILED: '초대 메일 발송 요청이 실패했습니다. 잠시 후 다시 시도해 주세요.',
 };
 
 export interface RowError {

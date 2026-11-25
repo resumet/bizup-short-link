@@ -12,7 +12,7 @@ import { DEV_SESSION_COOKIE, isDevAuthEnabled, readDevSession } from './dev-auth
 export const CSRF_COOKIE = 'bzup_csrf';
 export const CSRF_HEADER = 'x-csrf-token';
 
-interface AuthUser {
+export interface AuthUser {
   id: string;
   email?: string | null;
   email_confirmed_at?: string | null;
@@ -21,7 +21,7 @@ interface AuthUser {
 }
 
 /** 현재 요청의 인증 사용자. 로컬 개발 로그인이 켜져 있으면 개발 세션을 사용한다. */
-async function currentAuthUser(): Promise<AuthUser> {
+export async function currentAuthUser(): Promise<AuthUser> {
   if (isDevAuthEnabled()) {
     const store = await cookies();
     const uid = readDevSession(store.get(DEV_SESSION_COOKIE)?.value);
@@ -70,7 +70,7 @@ export async function requireStaff(db: Db, req?: Request): Promise<UserPrincipal
   if (decision.canLogin !== 'yes') {
     if (decision.reason === 'suspended') throw new AppError('ACCESS_SUSPENDED');
     if (decision.reason === 'not_member') throw new AppError('INSUFFICIENT_PERMISSION', '이 서비스의 직원으로 등록되지 않았습니다.');
-    throw new AppError('INSUFFICIENT_PERMISSION', '초대를 수락하고 초기 설정을 완료해 주세요.');
+    throw new AppError('INSUFFICIENT_PERMISSION', '초대를 수락하고 초기 설정을 완료해 주세요.', { details: { reason: decision.reason } });
   }
   return {
     kind: 'user',

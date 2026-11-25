@@ -403,3 +403,8 @@ p.warn { background: var(--warning-soft); }
   .card, .table-wrap, .filters, .modal { box-shadow: 0 0 0 1px var(--line-strong); }
   .topbar { background: var(--surface); backdrop-filter: none; -webkit-backdrop-filter: none; }
 }
+
+/* 간단한 목록 (직원 초대 실패 등) */
+.plain-list { list-style: none; margin: 0; padding: 0; }
+.plain-list li { padding: 0.5rem 0; border-top: 1px solid var(--separator, rgba(0,0,0,0.08)); }
+.plain-list li:first-child { border-top: 0; }

@@ -1,5 +1,5 @@
 // 인증 후 next 는 허용한 내부 경로만 받는다. 외부 URL·프로토콜 상대 URL 거절 (§18.3)
-const ALLOWED_PREFIXES = ['/links', '/admin'];
+const ALLOWED_PREFIXES = ['/links', '/admin', '/account'];
 
 export function safeNext(next: unknown, fallback = '/links'): string {
   if (typeof next !== 'string' || !next.startsWith('/') || next.startsWith('//') || next.includes('\\')) return fallback;

@@ -16,6 +16,9 @@ export async function staffForPage(nextPath: string): Promise<StaffPageResult> {
   } catch (e) {
     if (e instanceof AppError) {
       if (e.code === 'UNAUTHENTICATED') redirect(`/login?next=${encodeURIComponent(nextPath)}`);
+      // 초대 수락·초기 설정이 남은 직원은 초기 설정 화면으로
+      const reason = e.details?.reason;
+      if (reason === 'invitation_pending' || reason === 'onboarding_incomplete') redirect('/account/setup');
       return { ok: false, code: e.code, message: e.message };
     }
     throw e;
