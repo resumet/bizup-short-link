@@ -21,6 +21,7 @@ export function TopBar({ me, active }: { me: UserPrincipal; active?: string }) {
             <Link href="/admin/api-key" className={cls('apikey')} aria-current={current('apikey')}>API 키</Link>
           </>
         )}
+        <a href="/docs/api" target="_blank" rel="noopener" title="새 탭에서 API 문서 열기">API 스펙 ↗</a>
       </nav>
       <span className="me">
         <span className="avatar" aria-hidden="true">{[...me.displayName][0]}</span>

@@ -27,6 +27,7 @@ export default function ApiDocsPage() {
           <a href="#errors">오류</a>
           <a href="#examples">예시 코드</a>
         </nav>
+        <span className="me"><a href="/openapi.yaml">OpenAPI</a> · <Link href="/links">관리 화면</Link></span>
       </header>
       <main className="content narrow-content">
         <h1>BZUP Link API</h1>
