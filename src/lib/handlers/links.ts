@@ -81,8 +81,8 @@ export async function handleListCourses(c: HandlerCtx) {
   const sp = new URL(c.req.url).searchParams;
   const status = sp.get('status');
   if (status && status !== 'active' && status !== 'closed') throw new AppError('VALIDATION_ERROR', 'status 값이 올바르지 않습니다.');
-  const rows = await c.db.query<{ id: string; name: string; instructor_name: string | null; status: string; created_at: Date; updated_at: Date; version: number }>(
-    `select id, name, instructor_name, status, created_at, updated_at, version from bzup.courses
+  const rows = await c.db.query<{ id: string; name: string; instructor_name: string | null; cohort: string | null; webinar_at: Date | null; status: string; created_at: Date; updated_at: Date; version: number }>(
+    `select id, name, instructor_name, cohort, webinar_at, status, created_at, updated_at, version from bzup.courses
       where workspace_id = $1 and ($2::text is null or status = $2)
       order by status, name, created_at`,
     [c.principal.workspaceId, status],

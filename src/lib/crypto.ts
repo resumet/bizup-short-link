@@ -7,7 +7,7 @@ export const SHORT_CODE_RE = /^[0-9A-Za-z]{7}$/;
 /** 서비스 경로로 예약된 이름. 코드 라우트보다 우선하며 코드로 발급하지 않는다(대소문자 무시). */
 export const RESERVED_PATHS = [
   'links', 'admin', 'api', 'internal', 'auth', 'login', 'logout', '_next', 'healthz',
-  'favicon.ico', 'robots.txt', 'static', 'public', 'assets', 'signup', 'account', 'settings',
+  'favicon.ico', 'robots.txt', 'static', 'public', 'assets', 'signup', 'account', 'settings', 'docs',
 ];
 const RESERVED_LOWER = new Set(RESERVED_PATHS.map((s) => s.toLowerCase()));
 
