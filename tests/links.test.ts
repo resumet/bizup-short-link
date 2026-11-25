@@ -321,3 +321,21 @@ describe('자동생성 일괄 생성 (AC-44~AC-52)', () => {
     expect((await env.db.query<{ n: number }>(`select count(*)::int as n from bzup.generation_batches`))[0].n).toBe(0);
   });
 });
+
+describe('짧은 주소 type (강의당 type 별 1개)', () => {
+  it('같은 강의·type 은 1개만, 다른 type·다른 강의는 가능', async () => {
+    const { principal } = await env.addApiKey(owner, ['links:create']);
+    const mk = (course: string, type: string, url: string) =>
+      createSingleLink(env.db, principal, { ...parseSingleCreateBody({ course_id: course, name: 'n', destination_url: url }), linkType: type },
+        { idempotencyKey: crypto.randomUUID(), requestId: 'r', apiBase: '/api/v1' });
+    const r = await mk(courseA, '0001', 'https://t.example.com/1');
+    expect((r.body as { data: { type: string } }).data.type).toBe('0001');
+    const e = await err(mk(courseA, '0001', 'https://t.example.com/2'));
+    expect(e.code).toBe('LINK_TYPE_EXISTS');
+    expect((e.details as { short_url: string }).short_url).toContain((r.body as { data: { short_code: string } }).data.short_code);
+    await mk(courseA, '0002', 'https://t.example.com/3');
+    await mk(courseB, '0001', 'https://t.example.com/4');
+    expect((await env.db.query(`select count(*)::int as n from bzup.links where link_type is not null`))[0]).toEqual({ n: 3 });
+    await expect(env.db.query(`update bzup.links set link_type = 'abcd' where link_type = '0002'`)).rejects.toThrow();
+  });
+});

@@ -11,7 +11,7 @@ import {
 import { listLinks } from '@/lib/services/link-query';
 import { getDailyViews } from '@/lib/services/views';
 import { requirePermission } from '@/lib/auth/principal';
-import { AppError } from '@/lib/errors';
+import { AppError, validationError } from '@/lib/errors';
 import type { HandlerCtx } from '@/lib/route';
 
 const writeCtx = (c: HandlerCtx, key: string) => ({ idempotencyKey: key, requestId: c.requestId, apiBase: c.apiBase });
@@ -104,32 +104,39 @@ export async function handleGetTemplate(c: HandlerCtx) {
   return json({ data: { id: t[0].id, display_name: t[0].display_name, version: Number(t[0].version), items } }, 200, c.requestId);
 }
 
-/** POST /api/v1/short-links: { course_id, destination_url, name } → { short_url, ... } */
+const TYPE_RE = /^[0-9]{4}$/;
+
+/** POST /api/v1/short-links: { course_id, type, destination_url, name } → { short_url, ... } */
 export async function handleSimpleCreate(c: HandlerCtx) {
   const body = await readJson(c.req, LIMITS.single);
   if (!isObject(body)) throw new AppError('INVALID_JSON');
-  assertAllowedFields(body, ['course_id', 'destination_url', 'name']);
+  assertAllowedFields(body, ['course_id', 'type', 'destination_url', 'name']);
   if (body.course_id === undefined || body.course_id === null || body.course_id === '') {
     throw new AppError('COURSE_REQUIRED', 'course_id(강의 UUID)를 포함해 주세요.');
   }
+  if (typeof body.type !== 'string' || !TYPE_RE.test(body.type)) {
+    throw validationError('type 은 4자리 숫자 문자열(0000~9999)이어야 합니다.', [{ field: 'type', message: '예: "0001"' }]);
+  }
+  const linkType = body.type;
   const base = { course_id: body.course_id, name: body.name, destination_url: body.destination_url };
   const key = c.req.headers.get('idempotency-key') ? requireIdempotencyKey(c.req.headers.get('idempotency-key')) : crypto.randomUUID();
   let r;
   try {
-    r = await createSingleLink(c.db, c.principal, parseSingleCreateBody(base), writeCtx(c, key));
+    r = await createSingleLink(c.db, c.principal, { ...parseSingleCreateBody(base), linkType }, writeCtx(c, key));
   } catch (e) {
     // 같은 목적지가 있으면 확인 토큰으로 바로 새로 생성
     const token = e instanceof AppError && e.code === 'DUPLICATE_DESTINATION' ? (e.details as { review_token?: string })?.review_token : null;
     if (!token) throw e;
     r = await createSingleLink(c.db, c.principal,
-      parseSingleCreateBody({ ...base, review_token: token, duplicate_decision: 'create_new' }), writeCtx(c, `${key}:dup`));
+      { ...parseSingleCreateBody({ ...base, review_token: token, duplicate_decision: 'create_new' }), linkType }, writeCtx(c, `${key}:dup`));
   }
-  const d = (r.body as { data: { id: string; short_code: string; short_url: string; course_id: string; name: string; destination_url: string; created_at: string } }).data;
+  const d = (r.body as { data: { type: string | null; id: string; short_code: string; short_url: string; course_id: string; name: string; destination_url: string; created_at: string } }).data;
   return json({
     short_url: d.short_url,
     short_code: d.short_code,
     link_id: d.id,
     course_id: d.course_id,
+    type: d.type,
     name: d.name,
     destination_url: d.destination_url,
     created_at: d.created_at,

@@ -32,6 +32,7 @@ export type ApiBase = '/api/v1' | '/internal';
 // ---------------------------------------------------------------------------
 export interface LinkRow {
   id: string;
+  link_type?: string | null;
   workspace_id: string;
   issued_domain: string;
   short_code: string;
@@ -70,7 +71,7 @@ export async function loadSlots(q: Queryable, linkId: string): Promise<LinkSlot[
 export const LINK_COLUMNS = `l.id, l.workspace_id, l.issued_domain, l.short_code, l.name, l.initial_destination_url,
   l.destination_url, l.course_id, l.external_ref, l.status, l.version, l.source, l.creation_mode,
   l.generation_batch_id, l.created_by_type, l.created_by_id, l.created_by_label, l.updated_by_type,
-  l.updated_by_id, l.updated_by_label, l.created_at, l.updated_at, l.active_slot`;
+  l.updated_by_id, l.updated_by_label, l.created_at, l.updated_at, l.active_slot, l.link_type`;
 
 export function serializeLink(
   l: LinkRow, policy: Pick<UrlPolicy, 'primaryHost' | 'urlConfigVersion'>, slots?: LinkSlot[] | null,
@@ -78,6 +79,7 @@ export function serializeLink(
   return {
     id: l.id,
     course_id: l.course_id,
+    type: l.link_type ?? null,
     name: l.name,
     domain: policy.primaryHost,
     issued_domain: l.issued_domain,
@@ -133,6 +135,8 @@ export interface SingleCreateInput {
   reviewToken: string | null;
   decision: 'create_new' | null;
   raw: Record<string, unknown>;
+  /** 짧은 주소 유형 4자리 (강의당 유형별 1개) */
+  linkType?: string | null;
 }
 
 function parseReviewFields(body: Record<string, unknown>) {
@@ -296,6 +300,8 @@ interface CreatePlan {
   templateVersion: number | null;
   /** 생성 예정 행 수 (생성량 한도 차감용) */
   rowCount: number;
+  /** 단건 유형 (강의당 유형별 1개) */
+  linkType?: string | null;
   /** 배치: 트랜잭션 안에서 이름 목록과 대조해 행을 만든다 */
   buildRows: (q: Queryable) => Promise<PlannedRow[]>;
 }
@@ -438,6 +444,18 @@ async function runCreate(
           );
           batchId = b[0].id;
         }
+        if (plan.linkType) {
+          // 회사 잠금 안에서 확인 → 같은 강의·유형 동시 생성도 1개만 성공 (유니크 인덱스가 최종 보장)
+          const dup = await q.query<{ id: string; short_code: string; issued_domain: string }>(
+            `select id, short_code, issued_domain from bzup.links where workspace_id = $1 and course_id = $2 and link_type = $3`,
+            [p.workspaceId, course.id, plan.linkType],
+          );
+          if (dup[0]) {
+            throw new AppError('LINK_TYPE_EXISTS', undefined, {
+              details: { course_id: course.id, type: plan.linkType, link_id: dup[0].id, short_code: dup[0].short_code, short_url: shortUrlFor(policy.primaryHost, dup[0].short_code) },
+            });
+          }
+        }
         const created: LinkRow[] = [];
         for (const r of rows) {
           const ins = await q.query<LinkRow>(
@@ -445,13 +463,13 @@ async function runCreate(
                (id, workspace_id, issued_domain, short_code, name, initial_destination_url, destination_url,
                 canonical_destination, destination_fingerprint, course_id, external_ref, status, version, source,
                 creation_mode, generation_batch_id, created_by_type, created_by_id, created_by_label,
-                created_api_key_id, updated_by_type, updated_by_id, updated_by_label, created_at, updated_at, active_slot)
+                created_api_key_id, updated_by_type, updated_by_id, updated_by_label, created_at, updated_at, active_slot, link_type)
              values ($1,$2,$3,$4,$5,$6,$6,$7,$8,$9,$10,'active',1,$11,$12,$13,$14,$15,$16,$17,$14,$15,$16,
-                     clock_timestamp(), clock_timestamp(), $18)
+                     clock_timestamp(), clock_timestamp(), $18, $19)
              returning ${LINK_COLUMNS}`,
             [r.linkId, p.workspaceId, policy.primaryHost, r.shortCode, r.name, r.stored, r.canonical, r.fingerprint,
               course.id, r.externalRef, source, plan.mode, batchId, actor.type, actor.id, actor.label, actor.apiKeyId,
-              r.slots ? 0 : null],
+              r.slots ? 0 : null, plan.mode === 'single' ? plan.linkType ?? null : null],
           );
           const link = ins[0];
           created.push(link);
@@ -600,7 +618,7 @@ export interface WriteContext {
 
 export async function createSingleLink(db: Db, principal: Principal, input: SingleCreateInput, ctx: WriteContext) {
   requirePermission(principal, 'links:create');
-  const requestHash = hashRequest({ course_specified: input.courseId !== null, body: input.raw });
+  const requestHash = hashRequest({ course_specified: input.courseId !== null, body: input.raw, type: input.linkType ?? null });
   const idem = idemContext(principal, 'POST', '/links', ctx.idempotencyKey, requestHash);
   return runCreate(db, principal, {
     mode: 'single',
@@ -610,6 +628,7 @@ export async function createSingleLink(db: Db, principal: Principal, input: Sing
     templateId: null,
     templateVersion: null,
     rowCount: 1,
+    linkType: input.linkType ?? null,
     buildRows: async () => [plannedFrom('single', 1, input.name, input.destination, input.externalRef, null, 1)],
   }, idem, ctx.requestId, ctx.apiBase);
 }

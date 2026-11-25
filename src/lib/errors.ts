@@ -24,6 +24,7 @@ export type ErrorCode =
   | 'EXTERNAL_REF_EXISTS'
   | 'LAST_OWNER_REQUIRED'
   | 'EMPLOYEE_EXISTS'
+  | 'LINK_TYPE_EXISTS'
   | 'INVITE_DELIVERY_FAILED'
   | 'API_KEY_LIMIT_EXCEEDED'
   | 'API_KEY_STATE_CONFLICT'
@@ -74,6 +75,7 @@ const DEFAULT_STATUS: Record<ErrorCode, number> = {
   EXTERNAL_REF_EXISTS: 409,
   LAST_OWNER_REQUIRED: 409,
   EMPLOYEE_EXISTS: 409,
+  LINK_TYPE_EXISTS: 409,
   INVITE_DELIVERY_FAILED: 502,
   API_KEY_LIMIT_EXCEEDED: 409,
   API_KEY_STATE_CONFLICT: 409,
@@ -134,6 +136,7 @@ const DEFAULT_MESSAGE: Partial<Record<ErrorCode, string>> = {
   INVALID_IF_MATCH: 'If-Match 형식이 올바르지 않습니다.',
   CSRF_REJECTED: '요청 출처를 확인할 수 없습니다.',
   EMPLOYEE_EXISTS: '이미 등록된 직원입니다.',
+  LINK_TYPE_EXISTS: '이 강의에는 같은 type 의 짧은 주소가 이미 있습니다.',
   INVITE_DELIVERY_FAILED: '초대 메일 발송 요청이 실패했습니다. 잠시 후 다시 시도해 주세요.',
 };
 
