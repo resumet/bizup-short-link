@@ -136,6 +136,8 @@ PRD 23.1의 개발 순서를 따릅니다. 각 단계 진행 상황은 아래와
 
 - 강의 선택 + 엑셀(.xlsx, 최대 300행·4MB) 업로드. 머리글에서 `추천 코드`·`진행 매체`·`URL` 열을 찾는다(띄어쓰기 무관, `단축 링크` 열은 무시).
 - 이름: `{강의명}_{추천코드}_{진행매체}` (120자 초과 시 강의명을 줄임)
-- 같은 강의에 이미 있는 URL(정규화 기준, 삭제되지 않은 링크)은 건너뛰고 새 URL 만 만든다. 파일 안 중복·빈 값·잘못된 URL 은 행별로 표시.
+- 유형(type_key) 없이 생성 방식 `creation_mode = 'tracking'` 으로 구분한다 (목록의 방식 필터 '트래킹').
+- 같은 강의에 같은 URL(정규화 기준)의 트래킹 링크가 있으면 건너뛰고 새 URL 만 만든다. DB 고유 색인 `links_tracking_course_url_unique` 가 강의 + 원본 주소당 1개를 보장(삭제된 링크 제외). 일반·자동생성·유형 링크와는 비교하지 않는다.
+- 파일 안 중복·빈 값·잘못된 URL 은 행별로 표시.
 - 업로드 파일은 저장하지 않는다(요청 메모리에서만 읽음). 결과는 `bzup.tracking_uploads`·`bzup.tracking_links` 에 보관.
 - API: `POST /internal/tracking-links` (multipart `course_id`, `file`), `GET /internal/tracking-links?course_id=`, `GET /internal/tracking-links/export?course_id=` (단축 링크 채운 엑셀), `GET /internal/tracking-links/template` (양식)

@@ -1,10 +1,12 @@
 // 트래킹 링크: 엑셀(추천코드·진행매체·URL) → 강의별 짧은 주소 일괄 발급
 // - 이름: {강의명}_{추천코드}_{진행매체}
-// - 같은 강의에 이미 있는 URL(정규화 기준, 삭제되지 않은 링크)은 무시하고 새 URL 만 만든다
+// - 유형(type_key) 없이 생성 방식 creation_mode = 'tracking' 으로 구분한다
+// - 같은 강의에 이미 있는 트래킹 링크의 URL(정규화 기준, 삭제되지 않은 링크)은 무시하고 새 URL 만 만든다
+//   (DB 고유 색인 links_tracking_course_url_unique 가 최종 보장)
 // - 엑셀 파일은 저장하지 않고, 변환 결과(tracking_uploads·tracking_links)만 보관한다
 import { randomUUID } from 'node:crypto';
 import { AppError } from '@/lib/errors';
-import type { Db, Queryable } from '@/lib/db/types';
+import { pgConstraint, pgErrorCode, UNIQUE_VIOLATION, type Db, type Queryable } from '@/lib/db/types';
 import { lockWorkspace } from '@/lib/db/locks';
 import { principalRef, recheckPrincipal, requirePermission, sourceOf, type UserPrincipal } from '@/lib/auth/principal';
 import { assertAllowedDestination, parseDestination, type ParsedDestination } from '@/lib/url/destination';
@@ -67,15 +69,15 @@ async function activeCourse(q: Queryable, workspaceId: string, courseId: string)
   return c;
 }
 
-/** 강의에 이미 있는(삭제되지 않은) 링크: 정규화 URL → 링크 */
-async function existingByCanonical(q: Queryable, workspaceId: string, courseId: string, canonicals: string[]) {
-  if (!canonicals.length) return new Map<string, { id: string; name: string; short_code: string }>();
+/** 강의에 이미 있는(삭제되지 않은) 트래킹 링크: 정규화 URL → 링크 */
+async function existingByCanonical(q: Queryable, workspaceId: string, courseId: string, dests: ParsedDestination[]) {
+  if (!dests.length) return new Map<string, { id: string; name: string; short_code: string }>();
   const rows = await q.query<{ id: string; name: string; short_code: string; canonical_destination: string }>(
-    `select distinct on (canonical_destination) id, name, short_code, canonical_destination
+    `select id, name, short_code, canonical_destination
        from bzup.links
-      where workspace_id = $1 and course_id = $2 and deleted_at is null and canonical_destination = any($3::text[])
-      order by canonical_destination, created_at`,
-    [workspaceId, courseId, canonicals],
+      where workspace_id = $1 and course_id = $2 and creation_mode = 'tracking' and deleted_at is null
+        and destination_fingerprint in (select decode(x, 'hex') from unnest($3::text[]) as x)`,
+    [workspaceId, courseId, dests.map((d) => d.fingerprint.toString('hex'))],
   );
   return new Map(rows.map((r) => [r.canonical_destination, r]));
 }
@@ -139,11 +141,11 @@ export async function createTrackingLinks(
       if (!hit) continue;
       Object.assign(c.result, {
         status: 'exists', name: hit.name, link_id: hit.id, short_url: shortUrlFor(host, hit.short_code),
-        message: '이미 이 강의에 있는 URL 이라 건너뛰었습니다.',
+        message: '이 강의에 같은 URL 의 트래킹 링크가 있어 건너뛰었습니다.',
       });
     }
   };
-  markExisting(await existingByCanonical(db, principal.workspaceId, courseId, candidates.map((c) => c.dest.canonical)), policy0.primaryHost);
+  markExisting(await existingByCanonical(db, principal.workspaceId, courseId, candidates.map((c) => c.dest)), policy0.primaryHost);
   let fresh = candidates.filter((c) => c.result.status === 'error');
 
   // 3) 호출 한도 (업로드 1회 = 쓰기 1회 + 새 링크 N건)
@@ -158,7 +160,7 @@ export async function createTrackingLinks(
     const course = await activeCourse(q, p.workspaceId, courseId);
     const policy = await loadUrlPolicy(q);
     // 잠금 안에서 최신 상태로 다시 확인 (다른 업로드가 먼저 만든 URL 은 무시로 바뀐다)
-    markExisting(await existingByCanonical(q, p.workspaceId, courseId, fresh.map((c) => c.dest.canonical)), policy.primaryHost);
+    markExisting(await existingByCanonical(q, p.workspaceId, courseId, fresh.map((c) => c.dest)), policy.primaryHost);
     fresh = fresh.filter((c) => c.result.status === 'error');
 
     const actor = principalRef(p);
@@ -183,7 +185,7 @@ export async function createTrackingLinks(
           canonical_destination, destination_fingerprint, course_id, status, version, source, creation_mode,
           created_by_type, created_by_id, created_by_label, updated_by_type, updated_by_id, updated_by_label,
           created_at, updated_at)
-       select t.id, $1, $2, t.code, t.name, t.url, t.url, t.canonical, decode(t.fp, 'hex'), $3, 'active', 1, $4, 'single',
+       select t.id, $1, $2, t.code, t.name, t.url, t.url, t.canonical, decode(t.fp, 'hex'), $3, 'active', 1, $4, 'tracking',
               $5, $6, $7, $5, $6, $7, clock_timestamp(), clock_timestamp()
          from unnest($8::uuid[], $9::text[], $10::text[], $11::text[], $12::text[], $13::text[])
               as t(id, code, name, url, canonical, fp)`,
@@ -217,6 +219,12 @@ export async function createTrackingLinks(
       });
     }
     return up.id;
+  }).catch((e: unknown) => {
+    // 회사 잠금 아래에서 다시 확인하므로 정상적으로는 일어나지 않는다 (DB 고유 색인이 최종 보장)
+    if (pgErrorCode(e) === UNIQUE_VIOLATION && (pgConstraint(e) ?? '').includes('links_tracking_course_url_unique')) {
+      throw new AppError('CONFLICT', '다른 업로드와 동시에 처리되었습니다. 같은 파일로 다시 올려 주세요. 이미 만든 주소는 건너뜁니다.');
+    }
+    throw e;
   });
 
   return {

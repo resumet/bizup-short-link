@@ -44,7 +44,7 @@ export interface LinkRow {
   status: 'active' | 'inactive';
   version: number;
   source: 'web' | 'api';
-  creation_mode: 'single' | 'batch';
+  creation_mode: 'single' | 'batch' | 'tracking';
   generation_batch_id: string | null;
   created_by_type: string;
   created_by_id: string | null;

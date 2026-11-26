@@ -6,6 +6,7 @@ import type { UserPrincipal } from '@/lib/auth/principal';
 import { readTrackingWorkbook } from '@/lib/tracking/excel';
 import { createTrackingLinks, listTrackingLinks, trackingLinkName } from '@/lib/services/tracking-links';
 import { AppError } from '@/lib/errors';
+import { createSingleLink, parseSingleCreateBody } from '@/lib/services/links';
 import { PostgresLedger, setLedger } from '@/lib/services/ledger';
 import { reserveCodes } from '@/lib/services/links';
 import { loadUrlPolicy } from '@/lib/services/settings';
@@ -75,6 +76,10 @@ describe('발급', () => {
       `select course_id, source, deleted_at from bzup.links where id = $1`, [r.rows[0].link_id],
     );
     expect(link).toMatchObject({ course_id: courseA, source: 'web', deleted_at: null });
+    const [mode] = await env.db.query<{ creation_mode: string; type_key: string | null }>(
+      `select creation_mode, type_key from bzup.links where id = $1`, [r.rows[0].link_id],
+    );
+    expect(mode).toEqual({ creation_mode: 'tracking', type_key: null });
     const [rev] = await env.db.query<{ n: number }>(`select count(*)::int as n from bzup.link_revisions where link_id = $1`, [r.rows[0].link_id]);
     expect(rev.n).toBe(1);
   });
@@ -143,5 +148,31 @@ describe('DB 원장 일괄 예약 (운영과 같은 CODE_LEDGER_DRIVER=postgres)
     expect(call).toBe(2);
     expect(rows[0].shortCode).toMatch(/^[0-9A-Za-z]{7}$/);
     expect(rows[0].shortCode).not.toBe(first[0].shortCode);
+  });
+});
+
+describe('트래킹 링크만 강의 + 원본 주소당 1개', () => {
+  it('같은 강의에 같은 URL 의 일반 링크가 있어도 트래킹 링크는 만든다', async () => {
+    await createSingleLink(env.db, editor, parseSingleCreateBody({ course_id: courseA, name: '일반', destination_url: `${BASE}?code=g1` }),
+      { idempotencyKey: crypto.randomUUID(), requestId: 'x', apiBase: '/internal' });
+    const r = await upload(courseA, [['G', '유튜브', `${BASE}?code=g1`]]);
+    expect(r.created_count).toBe(1);
+  });
+
+  it('DB 가 같은 강의·URL 의 두 번째 트래킹 링크를 막고, 삭제하면 다시 만들 수 있다', async () => {
+    const first = await upload(courseA, [['A', '유튜브', `${BASE}?code=d1`]]);
+    const id = first.rows[0].link_id!;
+    // 같은 행을 그대로 복제해 넣으면 고유 색인 위반
+    await expect(env.db.query(
+      `insert into bzup.links (workspace_id, issued_domain, short_code, name, initial_destination_url, destination_url,
+         canonical_destination, destination_fingerprint, course_id, status, source, creation_mode, created_by_type, updated_by_type)
+       select workspace_id, issued_domain, 'Zz99999', name, initial_destination_url, destination_url,
+         canonical_destination, destination_fingerprint, course_id, status, source, creation_mode, created_by_type, updated_by_type
+         from bzup.links where id = $1`, [id],
+    )).rejects.toMatchObject({ code: '23505' });
+    await env.db.query(`update bzup.links set deleted_at = now() where id = $1`, [id]);
+    const again = await upload(courseA, [['A', '유튜브', `${BASE}?code=d1`]]);
+    expect(again.created_count).toBe(1);
+    expect(again.rows[0].link_id).not.toBe(id);
   });
 });

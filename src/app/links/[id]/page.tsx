@@ -81,7 +81,7 @@ export default async function LinkDetailPage({ params }: { params: Promise<{ id:
               {link.destination_url}
             </dd>
             <dt>최초 목적지</dt><dd className="break muted">{link.initial_destination_url}</dd>
-            <dt>생성</dt><dd>{link.created_by.label} · {link.source === 'web' ? '웹' : 'API'} · {link.creation_mode === 'single' ? '단건' : '자동생성'} · {formatKst(link.created_at)}</dd>
+            <dt>생성</dt><dd>{link.created_by.label} · {link.source === 'web' ? '웹' : 'API'} · {({ single: '단건', batch: '자동생성', tracking: '트래킹' } as const)[link.creation_mode]} · {formatKst(link.created_at)}</dd>
             <dt>최종 수정</dt><dd>{link.updated_by.label} · {formatKst(link.updated_at)} · 버전 {link.version}</dd>
             {link.generation_batch_id && (
               <><dt>자동생성 실행</dt><dd><Link href={`/links?generation_batch_id=${link.generation_batch_id}`}>같은 실행의 링크 보기</Link></dd></>

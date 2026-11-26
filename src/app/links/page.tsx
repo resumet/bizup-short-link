@@ -10,6 +10,8 @@ import { CopyButton } from '@/components/CopyButton';
 
 export const dynamic = 'force-dynamic';
 
+const CREATION_LABEL = { single: '단건', batch: '자동생성', tracking: '트래킹' } as const;
+
 const PASS = ['q', 'status', 'source', 'creation_mode', 'generation_batch_id', 'created_from', 'created_to'] as const;
 
 export default async function LinksPage({ searchParams }: { searchParams: Promise<Record<string, string | undefined>> }) {
@@ -81,6 +83,7 @@ export default async function LinksPage({ searchParams }: { searchParams: Promis
             <option value="">전체 방식</option>
             <option value="single">단건</option>
             <option value="batch">자동생성</option>
+            <option value="tracking">트래킹</option>
           </select>
           {sp.generation_batch_id && <input type="hidden" name="generation_batch_id" value={sp.generation_batch_id} />}
           <button className="button" type="submit">검색</button>
@@ -120,7 +123,7 @@ export default async function LinksPage({ searchParams }: { searchParams: Promis
                   <td><StatusPill status={l.status} /></td>
                   <td className="right num">{l.total_views.toLocaleString('ko-KR')}</td>
                   <td className="col-meta">
-                    {l.source === 'web' ? '웹' : 'API'} · {l.creation_mode === 'single' ? '단건' : '자동생성'}
+                    {l.source === 'web' ? '웹' : 'API'} · {CREATION_LABEL[l.creation_mode]}
                     <span className="sub">{l.created_by.label} · {formatKst(l.created_at)}</span>
                   </td>
                   <td className="nowrap num">{formatKst(l.updated_at)}</td>

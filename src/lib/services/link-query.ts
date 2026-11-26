@@ -16,7 +16,7 @@ export interface LinkFilters {
   course_unassigned?: boolean;
   status?: 'active' | 'inactive';
   source?: 'web' | 'api';
-  creation_mode?: 'single' | 'batch';
+  creation_mode?: 'single' | 'batch' | 'tracking';
   generation_batch_id?: string;
   created_from?: string;
   created_to?: string;
@@ -61,7 +61,7 @@ export function parseFilters(src: Record<string, unknown>, extraAllowed: string[
   if (f.course_id && f.course_unassigned) throw validationError('course_id와 course_unassigned=true는 함께 사용할 수 없습니다.');
   if (s('status')) f.status = oneOf(s('status'), ['active', 'inactive'] as const, 'status');
   if (s('source')) f.source = oneOf(s('source'), ['web', 'api'] as const, 'source');
-  if (s('creation_mode')) f.creation_mode = oneOf(s('creation_mode'), ['single', 'batch'] as const, 'creation_mode');
+  if (s('creation_mode')) f.creation_mode = oneOf(s('creation_mode'), ['single', 'batch', 'tracking'] as const, 'creation_mode');
   if (s('generation_batch_id')) {
     if (!UUID_RE.test(s('generation_batch_id')!)) throw validationError('generation_batch_id 형식이 올바르지 않습니다.');
     f.generation_batch_id = s('generation_batch_id')!.toLowerCase();
