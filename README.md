@@ -89,9 +89,9 @@ npm run bootstrap
 | 흐름 | 경로 |
 |---|---|
 | 로그인 | `/login` → `POST /auth/login` (서버가 Supabase 세션을 HttpOnly 쿠키로 발급, 멤버십 확인) |
-| 직원 초대 | `/admin/employees` → Auth Admin 초대 메일 → `/auth/confirm?type=invite` → `/account/setup` (이름·비밀번호) → 활성 |
+| 직원 초대 | `/admin/employees` → Auth Admin 초대 메일 → `/auth/confirm?type=invite` → `/login/confirm` (버튼을 눌러야 토큰 사용, 메일 검사기 선클릭 대비) → `/account/setup` (이름·비밀번호) → 활성 |
 | 기존 Auth 계정 초대 | 메일 없이 계정 연결(초기 설정 대기) → 그 계정으로 로그인 → `/account/setup` → 활성 |
-| 비밀번호 재설정 | `/login/forgot` → 메일 → `/auth/confirm?type=recovery` → `/account/password` |
+| 비밀번호 재설정 | `/login/forgot` → 메일 → `/auth/confirm?type=recovery` → `/login/confirm` → `/account/password` |
 | 로그아웃 | `POST /auth/logout` |
 
 ## 구현 현황
