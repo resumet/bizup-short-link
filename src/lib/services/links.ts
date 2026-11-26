@@ -311,7 +311,21 @@ const MAX_ENTRY_RETRIES = 3;
 
 export async function reserveCodes(db: Db, policy: UrlPolicy, workspaceId: string, rows: { linkId: string; shortCode?: string }[]): Promise<void> {
   const ledger = getLedger(db);
-  // 제한된 병렬성
+  if (ledger.reserveMany) {
+    // DB 원장: 한 문장으로 일괄 예약, 충돌한 코드만 새 코드로 다시 시도
+    let pending = rows.filter((r) => !r.shortCode);
+    for (let i = 0; i < MAX_CODE_ATTEMPTS && pending.length; i++) {
+      const tries = pending.map((r) => ({ row: r, code: generateShortCode() }));
+      const ok = await ledger.reserveMany(tries.map((t) => ({
+        namespaceId: policy.namespaceId, shortCode: t.code, linkId: t.row.linkId, workspaceId,
+      })));
+      for (const t of tries) if (ok.has(`${t.code}:${t.row.linkId}`)) t.row.shortCode = t.code;
+      pending = pending.filter((r) => !r.shortCode);
+    }
+    if (pending.length) throw new AppError('SERVICE_UNAVAILABLE', '짧은 주소 코드를 발급하지 못했습니다. 잠시 후 다시 시도해 주세요.');
+    return;
+  }
+  // 외부 원장(S3): 제한된 병렬성
   const CONCURRENCY = 8;
   let next = 0;
   const worker = async () => {

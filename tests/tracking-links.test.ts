@@ -6,6 +6,9 @@ import type { UserPrincipal } from '@/lib/auth/principal';
 import { readTrackingWorkbook } from '@/lib/tracking/excel';
 import { createTrackingLinks, listTrackingLinks, trackingLinkName } from '@/lib/services/tracking-links';
 import { AppError } from '@/lib/errors';
+import { PostgresLedger, setLedger } from '@/lib/services/ledger';
+import { reserveCodes } from '@/lib/services/links';
+import { loadUrlPolicy } from '@/lib/services/settings';
 
 type Env = Awaited<ReturnType<typeof setupDb>>;
 let env: Env;
@@ -111,5 +114,34 @@ describe('발급', () => {
     const name = trackingLinkName('가'.repeat(200), '코드', '매체');
     expect([...name].length).toBe(120);
     expect(name.endsWith('_코드_매체')).toBe(true);
+  });
+});
+
+describe('DB 원장 일괄 예약 (운영과 같은 CODE_LEDGER_DRIVER=postgres)', () => {
+  it('한 문장으로 예약해 13행 업로드가 끝나고, 코드는 모두 다르다', async () => {
+    setLedger(new PostgresLedger(env.db));
+    const rows = Array.from({ length: 13 }, (_, i) => [`R${i}`, '유튜브', `${BASE}?code=x${i}`] as [string, string, string]);
+    const r = await upload(courseA, rows);
+    expect(r.created_count).toBe(13);
+    expect(new Set(r.rows.map((x) => x.short_url)).size).toBe(13);
+    const [c] = await env.db.query<{ n: number }>(`select count(*)::int as n from bzup_ledger.code_reservations`);
+    expect(c.n).toBe(13);
+  });
+
+  it('이미 예약된 코드와 충돌하면 그 행만 새 코드로 다시 예약한다', async () => {
+    const ledger = new PostgresLedger(env.db);
+    setLedger(ledger);
+    const policy = await loadUrlPolicy(env.db);
+    const first = [{ linkId: crypto.randomUUID() } as { linkId: string; shortCode?: string }];
+    await reserveCodes(env.db, policy, env.workspaceId, first);
+    // 같은 코드를 다른 링크가 먼저 가져간 상태를 흉내: 예약 시도 1회차에 기존 코드를 끼워 넣는다
+    const rows = [{ linkId: crypto.randomUUID(), shortCode: undefined as string | undefined }];
+    const orig = ledger.reserveMany.bind(ledger);
+    let call = 0;
+    ledger.reserveMany = async (inputs) => orig(call++ === 0 ? inputs.map((i) => ({ ...i, shortCode: first[0].shortCode! })) : inputs);
+    await reserveCodes(env.db, policy, env.workspaceId, rows);
+    expect(call).toBe(2);
+    expect(rows[0].shortCode).toMatch(/^[0-9A-Za-z]{7}$/);
+    expect(rows[0].shortCode).not.toBe(first[0].shortCode);
   });
 });

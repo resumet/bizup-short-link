@@ -16,6 +16,12 @@ export interface ReservationInput {
 export interface CodeLedger {
   /** true=예약 성공, false=이미 예약된 코드. 원장 장애는 예외. */
   reserve(input: ReservationInput): Promise<boolean>;
+  /**
+   * 여러 코드를 한 번에 예약하고 성공한 `${short_code}:${link_id}` 집합을 돌려준다 (선택).
+   * DB 원장은 동시 쿼리 대신 한 문장으로 처리해야 한다: 연결 수보다 많은 동시 쿼리는
+   * postgres.js 파이프라이닝 + Supabase transaction pooler 조합에서 멈춘다.
+   */
+  reserveMany?(inputs: ReservationInput[]): Promise<Set<string>>;
 }
 
 /** 개발·테스트용: 별도 schema 의 append-only 테이블 (자체 연결로 즉시 커밋) */
@@ -30,6 +36,18 @@ export class PostgresLedger implements CodeLedger {
       [i.namespaceId, i.shortCode, i.linkId, i.workspaceId],
     );
     return rows.length === 1;
+  }
+  async reserveMany(inputs: ReservationInput[]): Promise<Set<string>> {
+    if (!inputs.length) return new Set();
+    const rows = await this.db.query<{ short_code: string; link_id: string }>(
+      `insert into bzup_ledger.code_reservations (service_namespace_id, short_code, link_id, workspace_id)
+       select t.ns, t.code, t.link_id, t.ws
+         from unnest($1::uuid[], $2::text[], $3::uuid[], $4::uuid[]) as t(ns, code, link_id, ws)
+       on conflict do nothing
+       returning short_code, link_id`,
+      [inputs.map((i) => i.namespaceId), inputs.map((i) => i.shortCode), inputs.map((i) => i.linkId), inputs.map((i) => i.workspaceId)],
+    );
+    return new Set(rows.map((r) => `${r.short_code}:${r.link_id}`));
   }
 }
 
