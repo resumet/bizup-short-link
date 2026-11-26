@@ -69,7 +69,11 @@ export function errorResponse(e: unknown, requestId: string): Response {
   let err: AppError;
   if (isAppError(e)) err = e;
   else if (isUnavailable(e)) err = new AppError('SERVICE_UNAVAILABLE');
-  else {
+  else if (pgErrorCode(e) === '42P01' || pgErrorCode(e) === '42703') {
+    // 테이블·열 없음: 배포된 코드보다 DB 마이그레이션이 뒤처진 경우
+    console.error(`[${requestId}] schema out of date`, e instanceof Error ? e.message : '', pgErrorCode(e));
+    err = new AppError('SERVICE_UNAVAILABLE', 'DB 구성이 최신이 아닙니다. 관리자가 DB 마이그레이션(npm run db:migrate:prod)을 적용해야 합니다.');
+  } else {
     // 요청 본문·URL·헤더 원문을 로그에 남기지 않는다 (§18.5)
     console.error(`[${requestId}] unexpected error`, e instanceof Error ? `${e.name}: ${e.message}` : 'unknown', pgErrorCode(e) ?? '');
     err = new AppError('INTERNAL_ERROR');
