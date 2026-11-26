@@ -1,5 +1,6 @@
 'use client';
 import { useState } from 'react';
+import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { apiFetch, ApiError, formatKst, newIdempotencyKey } from '@/lib/client/api';
 import { StatusPillClient } from './StatusPillClient';
@@ -93,7 +94,7 @@ export function CoursesAdmin({ courses }: { courses: Course[] }) {
                 {c.id.slice(0, 8)}…
                 {c.source === 'dashboard' && <span className="sub">가져온 강의</span>}
               </td>
-              <td className="col-name">{c.name}</td>
+              <td className="col-name"><Link href={`/admin/courses/${c.id}`} title="이 강의의 링크 목록 보기">{c.name}</Link></td>
               <td>{c.instructor_name}</td>
               <td className="num">{c.cohort ? `${c.cohort}기` : ''}</td>
               <td className="nowrap num">{formatKst(c.webinar_at)}</td>
