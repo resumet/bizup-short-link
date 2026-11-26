@@ -286,6 +286,14 @@ p.warn { background: var(--warning-soft); }
 .short { display: inline-flex; align-items: center; gap: 0.5rem; font-variant-numeric: tabular-nums; }
 .short code { background: none; padding: 0; font-size: 0.8125rem; color: var(--fg); }
 
+/* 현재 목적지: 가운데 생략 + 복사 */
+.table .col-dest { min-width: 14rem; max-width: 22rem; }
+.dest { display: flex; align-items: center; gap: 0.5rem; min-width: 0; }
+.dest > .pill, .dest > .button { flex: none; }
+.mid-ellipsis { display: flex; min-width: 0; flex: 1 1 auto; white-space: nowrap; }
+.mid-ellipsis .head { overflow: hidden; text-overflow: ellipsis; min-width: 1.5em; }
+.mid-ellipsis .tail { flex: none; }
+
 .right { text-align: right !important; }
 
 /* 일자별 조회수 막대 */
