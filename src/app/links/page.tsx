@@ -109,7 +109,9 @@ export default async function LinksPage({ searchParams }: { searchParams: Promis
             <tbody>
               {result.data.map((l) => (
                 <tr key={l.id}>
-                  <td className="nowrap num">{l.type_key ? <span title={l.type_key}>{l.type_label ?? l.type_key}</span> : <span className="muted">-</span>}</td>
+                  <td className="nowrap num">{l.type_key ? <span title={l.type_key}>{l.type_label ?? l.type_key}</span>
+                    : l.creation_mode === 'tracking' ? <span title="엑셀 업로드로 만든 트래킹 링크">트래킹</span>
+                    : <span className="muted">-</span>}</td>
                   <td className="col-name"><Link href={`/links/${l.id}`}>{l.name}</Link></td>
                   <td className="nowrap"><span className="short"><code>{l.short_url.replace(/^https?:\/\//, '')}</code><CopyButton text={l.short_url} /></span></td>
                   <td className="ellipsis" title={l.destination_url}>
