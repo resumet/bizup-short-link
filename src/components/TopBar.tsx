@@ -11,7 +11,17 @@ export function TopBar({ me, active }: { me: UserPrincipal; active?: string }) {
       <Link href="/links" className="brand">BZUP Link</Link>
       <nav aria-label="주 메뉴">
         <Link href="/links" className={cls('links')} aria-current={current('links')}>링크 목록</Link>
-        {me.role !== 'viewer' && <Link href="/links/new" className={cls('new')} aria-current={current('new')}>짧은 주소 만들기</Link>}
+        {me.role !== 'viewer' && (
+          <div className="nav-group">
+            <span className={`nav-group-label${active === 'new' || active === 'tracking' ? ' active' : ''}`} tabIndex={0} aria-haspopup="true">
+              짧은 주소 만들기 <span aria-hidden="true">▾</span>
+            </span>
+            <div className="nav-sub" role="group" aria-label="짧은 주소 만들기">
+              <Link href="/links/tracking" className={cls('tracking')} aria-current={current('tracking')}>트래킹 링크 만들기</Link>
+              <Link href="/links/new" className={cls('new')} aria-current={current('new')}>일반 링크 만들기</Link>
+            </div>
+          </div>
+        )}
         {me.role === 'owner' && (
           <>
             <Link href="/admin/courses" className={cls('courses')} aria-current={current('courses')}>강의 관리</Link>

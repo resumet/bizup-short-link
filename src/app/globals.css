@@ -135,6 +135,23 @@ h1, h2, h3 { color: var(--fg); font-weight: 700; }
 }
 .topbar nav a:hover { background: var(--neutral-soft); text-decoration: none; }
 .topbar nav a.active { background: var(--fg); color: var(--bg); font-weight: 600; }
+.topbar .nav-group { position: relative; display: flex; }
+.topbar .nav-group-label {
+  color: var(--fg-2); font-size: 0.875rem; padding: 0.375rem 0.75rem; border-radius: 999px; cursor: default;
+  white-space: nowrap; transition: background-color 150ms var(--ease-out);
+}
+.topbar .nav-group-label.active { background: var(--fg); color: var(--bg); font-weight: 600; }
+.topbar .nav-group:hover .nav-group-label:not(.active),
+.topbar .nav-group:focus-within .nav-group-label:not(.active) { background: var(--neutral-soft); }
+.topbar .nav-sub {
+  display: none; position: absolute; top: 100%; left: 0; z-index: 50; min-width: 11rem;
+  flex-direction: column; gap: 0.125rem; padding: 0.375rem; margin-top: 0.25rem;
+  background: var(--surface); border-radius: var(--radius); box-shadow: var(--shadow-lg);
+}
+/* 마우스가 라벨에서 메뉴로 옮겨가는 틈을 메운다 */
+.topbar .nav-sub::before { content: ''; position: absolute; left: 0; right: 0; top: -0.375rem; height: 0.375rem; }
+.topbar .nav-group:hover .nav-sub, .topbar .nav-group:focus-within .nav-sub { display: flex; }
+.topbar .nav-sub a { border-radius: var(--radius-sm); white-space: nowrap; }
 .topbar .me { color: var(--muted); font-size: 0.8125rem; display: flex; gap: 0.625rem; align-items: center; white-space: nowrap; }
 .avatar {
   width: 1.75rem; height: 1.75rem; border-radius: 50%; display: inline-grid; place-items: center;
@@ -384,6 +401,10 @@ p.warn { background: var(--warning-soft); }
   .kv dd { margin-bottom: 0.625rem; }
   .topbar { flex-wrap: wrap; gap: 0.5rem 1rem; }
   .topbar nav { order: 3; width: 100%; overflow-x: auto; flex-wrap: nowrap; }
+  /* 좁은 화면: 하위 메뉴를 펼친 채 가로로 나열 (가로 스크롤 영역 안에서 잘리지 않게) */
+  .topbar .nav-group-label { display: none; }
+  .topbar .nav-sub, .topbar .nav-group:hover .nav-sub { display: flex; position: static; flex-direction: row; padding: 0; margin: 0; background: none; box-shadow: none; min-width: 0; }
+  .topbar .nav-sub::before { display: none; }
   .modal { border-radius: 18px; }
 }
 

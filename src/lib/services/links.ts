@@ -309,7 +309,7 @@ interface CreatePlan {
 const MAX_CODE_ATTEMPTS = 5;
 const MAX_ENTRY_RETRIES = 3;
 
-async function reserveCodes(db: Db, policy: UrlPolicy, workspaceId: string, rows: PlannedRow[]): Promise<void> {
+export async function reserveCodes(db: Db, policy: UrlPolicy, workspaceId: string, rows: { linkId: string; shortCode?: string }[]): Promise<void> {
   const ledger = getLedger(db);
   // 제한된 병렬성
   const CONCURRENCY = 8;

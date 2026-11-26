@@ -129,3 +129,13 @@ PRD 23.1의 개발 순서를 따릅니다. 각 단계 진행 상황은 아래와
   - key 변경·삭제 불가(DB 트리거), 삭제 대신 비활성화, key 재사용 금지
 - 전환 마이그레이션 `20261126010000_short_link_type_key.sql` 은 **기존 발급 링크 전체와 종속 데이터를 삭제**한다 (테스트 기간 결정, 비가역).
   강의·직원·API 키·코드 원장은 유지. 대시보드 전달 문서: `docs/dashboard-short-link-type-key-handoff.md`
+
+## 트래킹 링크 (`/links/tracking`)
+
+상단 메뉴 **짧은 주소 만들기 → 트래킹 링크 만들기**. (일반 링크 만들기 = `/links/new`)
+
+- 강의 선택 + 엑셀(.xlsx, 최대 300행·4MB) 업로드. 머리글에서 `추천 코드`·`진행 매체`·`URL` 열을 찾는다(띄어쓰기 무관, `단축 링크` 열은 무시).
+- 이름: `{강의명}_{추천코드}_{진행매체}` (120자 초과 시 강의명을 줄임)
+- 같은 강의에 이미 있는 URL(정규화 기준, 삭제되지 않은 링크)은 건너뛰고 새 URL 만 만든다. 파일 안 중복·빈 값·잘못된 URL 은 행별로 표시.
+- 업로드 파일은 저장하지 않는다(요청 메모리에서만 읽음). 결과는 `bzup.tracking_uploads`·`bzup.tracking_links` 에 보관.
+- API: `POST /internal/tracking-links` (multipart `course_id`, `file`), `GET /internal/tracking-links?course_id=`, `GET /internal/tracking-links/export?course_id=` (단축 링크 채운 엑셀), `GET /internal/tracking-links/template` (양식)

@@ -18,7 +18,7 @@ export default async function NewLinkPage() {
     <div className="page">
       <TopBar me={me} active="new" />
       <main className="content narrow-content">
-        <h1>짧은 주소 만들기</h1>
+        <h1>일반 링크 만들기</h1>
         <NewLinkForm courses={courses} isOwner={me.role === 'owner'} />
       </main>
     </div>

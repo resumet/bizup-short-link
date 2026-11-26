@@ -1,13 +1,13 @@
 'use client';
 import { useState } from 'react';
 
-export function CopyButton({ text, label = '복사' }: { text: string; label?: string }) {
+export function CopyButton({ text, label = '복사', ariaLabel }: { text: string; label?: string; ariaLabel?: string }) {
   const [done, setDone] = useState(false);
   return (
     <button
       type="button"
       className={`button small ${done ? 'done' : 'secondary'}`}
-      aria-label={`${text} ${label}`}
+      aria-label={ariaLabel ?? `${text} ${label}`}
       aria-live="polite"
       onClick={async () => {
         try {
