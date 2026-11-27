@@ -9,7 +9,9 @@ import {
   parseSingleCreateBody, patchLink, preflight, serializeLink,
 } from '@/lib/services/links';
 import { listLinks } from '@/lib/services/link-query';
-import { createTypedShortLink, listShortLinkTypes } from '@/lib/services/short-links';
+import {
+  createTypedShortLink, getTypedLinkState, listShortLinkTypes, setTypedSlot, switchTypedSlot,
+} from '@/lib/services/short-links';
 import { getDailyViews } from '@/lib/services/views';
 import { requirePermission } from '@/lib/auth/principal';
 import { AppError } from '@/lib/errors';
@@ -126,4 +128,22 @@ export async function handleSimpleCreate(c: HandlerCtx) {
 /** GET /api/v1/short-link-types */
 export async function handleListShortLinkTypes(c: HandlerCtx) {
   return json({ types: await listShortLinkTypes(c.db, c.principal) }, 200, c.requestId);
+}
+
+/** GET /api/v1/short-links?course_id=&type_key=: 강의·유형의 짧은 주소와 전환 상태 */
+export async function handleTypedState(c: HandlerCtx) {
+  const r = await getTypedLinkState(c.db, c.principal, searchParamsObject(c.req.url));
+  return json({ data: r }, 200, c.requestId);
+}
+
+/** PUT /api/v1/short-links/slots: 전환 주소 채우기·바꾸기·비우기 (+activate) */
+export async function handleTypedSetSlot(c: HandlerCtx) {
+  const r = await setTypedSlot(c.db, c.principal, await readJson(c.req, LIMITS.single), writeCtx(c, crypto.randomUUID()));
+  return json({ data: r }, 200, c.requestId);
+}
+
+/** POST /api/v1/short-links/switch: 전환 */
+export async function handleTypedSwitch(c: HandlerCtx) {
+  const r = await switchTypedSlot(c.db, c.principal, await readJson(c.req, LIMITS.single), writeCtx(c, crypto.randomUUID()));
+  return json({ data: r }, 200, c.requestId);
 }

@@ -27,6 +27,9 @@ export type ErrorCode =
   | 'LINK_TYPE_EXISTS'
   | 'UNKNOWN_LINK_TYPE'
   | 'LINK_TYPE_INACTIVE'
+  | 'LINK_NOT_SWITCHABLE'
+  | 'UNKNOWN_SLOT'
+  | 'SLOT_EMPTY'
   | 'INVITE_DELIVERY_FAILED'
   | 'API_KEY_LIMIT_EXCEEDED'
   | 'API_KEY_STATE_CONFLICT'
@@ -80,6 +83,9 @@ const DEFAULT_STATUS: Record<ErrorCode, number> = {
   LINK_TYPE_EXISTS: 409,
   UNKNOWN_LINK_TYPE: 422,
   LINK_TYPE_INACTIVE: 422,
+  LINK_NOT_SWITCHABLE: 422,
+  UNKNOWN_SLOT: 422,
+  SLOT_EMPTY: 409,
   INVITE_DELIVERY_FAILED: 502,
   API_KEY_LIMIT_EXCEEDED: 409,
   API_KEY_STATE_CONFLICT: 409,
@@ -143,6 +149,9 @@ const DEFAULT_MESSAGE: Partial<Record<ErrorCode, string>> = {
   LINK_TYPE_EXISTS: '이 강의에는 같은 유형의 짧은 주소가 이미 있습니다.',
   UNKNOWN_LINK_TYPE: '등록되지 않은 type_key 입니다. /api/v1/short-link-types 에서 확인해 주세요.',
   LINK_TYPE_INACTIVE: '비활성 유형이라 새 짧은 주소를 만들 수 없습니다.',
+  LINK_NOT_SWITCHABLE: '전환 주소가 없는 짧은 주소입니다. 전환형 유형으로 만든 링크만 전환할 수 있습니다.',
+  UNKNOWN_SLOT: '없는 전환 키입니다.',
+  SLOT_EMPTY: '비어 있는 전환 주소입니다. 주소를 먼저 채워 주세요.',
   INVITE_DELIVERY_FAILED: '초대 메일 발송 요청이 실패했습니다. 잠시 후 다시 시도해 주세요.',
 };
 

@@ -14,12 +14,15 @@ export default async function NewLinkPage() {
     `select id, name, instructor_name from bzup.courses where workspace_id = $1 and status = 'active' order by name, created_at`,
     [me.workspaceId],
   );
+  const types = await getDb().query<{ key: string; label: string; slots: { key: string; label: string }[] | null }>(
+    `select key, label, slots from bzup.short_link_types where active order by (slots is null), label`,
+  );
   return (
     <div className="page">
       <TopBar me={me} active="new" />
       <main className="content narrow-content">
         <h1>일반 링크 만들기</h1>
-        <NewLinkForm courses={courses} isOwner={me.role === 'owner'} />
+        <NewLinkForm courses={courses} types={types} isOwner={me.role === 'owner'} />
       </main>
     </div>
   );

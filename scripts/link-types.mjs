@@ -6,6 +6,9 @@
 //   npm run types -- rename <key> "<label>"
 //   npm run types -- deactivate <key>           (이미 발급된 링크의 이동은 계속 동작)
 //   npm run types -- activate <key>
+//   npm run types -- slots <key> "chat=단톡방,youtube=유튜브 라이브,zoom=줌 라이브"   (전환형 유형, 2~5개)
+//   npm run types -- slots <key> none                                              (일반 유형으로)
+//     전환 주소 구성은 그 유형으로 링크를 만들기 전까지만 바꿀 수 있다.
 //
 // 운영 DB 대상: npm run types:prod -- <명령>
 // key 는 변경·삭제할 수 없고, 다른 용도로 재사용하지 않는다. 새 용도에는 새 key 를 만든다.
@@ -23,7 +26,8 @@ function needLabel() { const l = (label ?? '').trim(); if (!l || [...l].length >
 
 try {
   if (cmd === 'list' || !cmd) {
-    console.table(await sql`select key, label, active, created_at, updated_at from bzup.short_link_types order by key collate "C"`);
+    const rows = await sql`select key, label, active, slots, created_at, updated_at from bzup.short_link_types order by key collate "C"`;
+    console.table(rows.map((r) => ({ ...r, slots: r.slots ? r.slots.map((d) => `${d.key}=${d.label}`).join(', ') : '' })));
   } else if (cmd === 'add') {
     const l = needKey() && needLabel();
     if (l) {
@@ -42,8 +46,31 @@ try {
       const r = await sql`update bzup.short_link_types set active = ${cmd === 'activate'} where key = ${key} returning key`;
       r.length ? console.log(`${cmd === 'activate' ? '활성화' : '비활성화'}: ${key}`) : fail(`없는 key: ${key}`);
     }
+  } else if (cmd === 'slots') {
+    if (needKey()) {
+      let slots = null;
+      const spec = (label ?? '').trim();
+      if (spec && spec !== 'none') {
+        slots = spec.split(',').map((x) => x.trim()).filter(Boolean).map((x) => {
+          const i = x.indexOf('=');
+          return { key: x.slice(0, i).trim(), label: x.slice(i + 1).trim() };
+        });
+        const keys = new Set(slots.map((d) => d.key));
+        const bad = slots.length < 2 || slots.length > 5 || keys.size !== slots.length
+          || slots.some((d) => !/^[a-z][a-z0-9_]{0,31}$/.test(d.key) || !d.label || [...d.label].length > 40);
+        if (bad) { fail('형식: "chat=단톡방,youtube=유튜브 라이브" (2~5개, 키는 소문자 영문·숫자·밑줄, 이름 1~40자)'); slots = undefined; }
+      } else if (!spec) { fail('전환 주소 구성을 입력해 주세요. 일반 유형으로 되돌리려면 none'); slots = undefined; }
+      if (slots !== undefined) {
+        const [{ n }] = await sql`select count(*)::int as n from bzup.links where type_key = ${key}`;
+        if (n > 0) fail(`이 유형으로 만든 링크(${n}개)가 있어 전환 주소 구성을 바꿀 수 없습니다. 새 유형을 만들어 주세요.`);
+        else {
+          const r = await sql`update bzup.short_link_types set slots = ${slots ? sql.json(slots) : null} where key = ${key} returning key`;
+          r.length ? console.log(`전환 주소 구성: ${key} → ${slots ? slots.map((d) => `${d.key}=${d.label}`).join(', ') : '(없음)'}`) : fail(`없는 key: ${key}`);
+        }
+      }
+    }
   } else {
-    fail('명령: list | add <key> "<label>" | rename <key> "<label>" | deactivate <key> | activate <key>');
+    fail('명령: list | add <key> "<label>" | rename <key> "<label>" | deactivate <key> | activate <key> | slots <key> "<키=이름,...>"|none');
   }
 } finally {
   await sql.end();

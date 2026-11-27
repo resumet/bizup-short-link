@@ -23,6 +23,7 @@ export default function ApiDocsPage() {
           <a href="#auth">인증</a>
           <a href="#types">유형 조회</a>
           <a href="#short-links">짧은 주소 발급</a>
+          <a href="#switch">전환형</a>
           <a href="#idempotency">멱등성</a>
           <a href="#errors">오류</a>
           <a href="#examples">예시 코드</a>
@@ -68,14 +69,21 @@ export default function ApiDocsPage() {
   -H "Authorization: Bearer $BZUP_API_KEY"`}</Code>
         <Code>{`{
   "types": [
-    { "key": "landing", "label": "기본 랜딩 QR", "active": true },
-    { "key": "payment", "label": "결제페이지 QR", "active": true }
+    { "key": "free_chat", "label": "무료단톡방", "active": true,
+      "slots": [
+        { "key": "chat", "label": "단톡방" },
+        { "key": "youtube", "label": "유튜브 라이브" },
+        { "key": "zoom", "label": "줌 라이브" }
+      ] },
+    { "key": "landing", "label": "기본 랜딩 QR", "active": true, "slots": null },
+    { "key": "payment", "label": "결제페이지 QR", "active": true, "slots": null }
   ]
 }`}</Code>
         <ul className="small">
           <li>유형 목록의 기준은 서버입니다. 클라이언트에 고정 목록을 두지 말고 이 API로 확인하세요.</li>
           <li><code>key</code>는 바뀌지 않는 식별자입니다. 형식: 소문자 영문으로 시작, 소문자 영문·숫자·밑줄, 1~64자 (<code>^[a-z][a-z0-9_]{'{0,63}'}$</code>).</li>
           <li><code>label</code>은 표시 이름이며 바뀔 수 있습니다. 비활성 유형으로는 새 짧은 주소를 만들 수 없지만, 이미 발급된 주소는 계속 동작합니다.</li>
+          <li><code>slots</code>가 있으면 <a href="#switch">전환형 유형</a>입니다. 일반 유형은 <code>null</code>입니다.</li>
         </ul>
 
         <h2 id="short-links">짧은 주소 발급</h2>
@@ -98,11 +106,12 @@ export default function ApiDocsPage() {
           <tbody>
             <tr><td><code>course_id</code></td><td>string (UUID)</td><td>예</td><td>강의 UUID. 진행중 강의만 가능합니다.</td></tr>
             <tr><td><code>type_key</code></td><td>string</td><td>예</td><td>등록된 유형 key (예: <code>landing</code>, <code>payment</code>). 숫자·숫자 문자열(<code>&quot;0001&quot;</code>)·대문자·공백은 거부됩니다.</td></tr>
-            <tr><td><code>destination_url</code></td><td>string</td><td>예</td><td>최대 2,000자, <code>http://</code> 또는 <code>https://</code> 전체 주소. 사용자명·비밀번호가 포함된 주소는 금지</td></tr>
+            <tr><td><code>destination_url</code></td><td>string</td><td>예*</td><td>최대 2,000자, <code>http://</code> 또는 <code>https://</code> 전체 주소. 사용자명·비밀번호가 포함된 주소는 금지. *전환형 유형은 <code>slot_urls</code>의 첫 주소로 대신할 수 있습니다.</td></tr>
             <tr><td><code>name</code></td><td>string</td><td>예</td><td>앞뒤 공백 제거 후 1~120자</td></tr>
+            <tr><td><code>slot_urls</code></td><td>object</td><td>아니오</td><td>전환형 유형만. <code>{'{ "전환키": URL 또는 null }'}</code>. <a href="#switch">전환형</a> 참고</td></tr>
           </tbody>
         </table>
-        <p className="muted small">위 네 필드 외의 필드(구형 <code>type</code> 포함)를 보내면 422 <code>VALIDATION_ERROR</code>입니다.</p>
+        <p className="muted small">위 필드 외의 필드(구형 <code>type</code> 포함)를 보내면 422 <code>VALIDATION_ERROR</code>입니다.</p>
         <Code>{`curl -X POST ${BASE}/api/v1/short-links \\
   -H "Authorization: Bearer $BZUP_API_KEY" \\
   -H "Content-Type: application/json" \\
@@ -155,6 +164,84 @@ export default function ApiDocsPage() {
   }
 }`}</Code>
 
+        <h2 id="switch">전환형 짧은 주소 (단톡방 → 라이브 → 줌)</h2>
+        <p>
+          짧은 주소 하나의 연결 대상을 필요할 때 바꿉니다. 예를 들어 <code>free_chat</code>(무료단톡방) 유형은
+          단톡방·유튜브 라이브·줌 라이브 주소 3개를 갖고, 문자로 나간 같은 짧은 주소가 라이브 전에는 단톡방, 라이브 중에는 유튜브로 연결됩니다.
+        </p>
+        <ul className="small">
+          <li>만들 때는 <strong>첫 주소만 필수</strong>입니다. 유튜브·줌 주소는 비워 두었다가 나중에 채웁니다.</li>
+          <li>링크는 <strong>강의 UUID + type_key</strong>로 찾습니다. 링크 ID·ETag 가 필요 없습니다.</li>
+          <li>전환은 다음 클릭부터 바로 적용되고, 모든 변경은 관리 화면의 변경 이력에 남습니다.</li>
+          <li>같은 요청을 반복해도 안전합니다. 이미 그 상태면 아무것도 바꾸지 않고 <code>changed_fields: []</code>로 응답합니다.</li>
+          <li>지금 연결 중인 주소는 항상 채워져 있습니다. 빈 주소로 전환하거나 연결 중인 주소를 비우면 409 <code>SLOT_EMPTY</code>입니다.</li>
+          <li>조회는 <code>links:read</code>, 채우기·전환은 <code>links:update</code> 권한이 필요합니다.</li>
+        </ul>
+
+        <h3>1. 만들기 (유튜브·줌은 비워 둠)</h3>
+        <Code>{`curl -X POST ${BASE}/api/v1/short-links \\
+  -H "Authorization: Bearer $BZUP_API_KEY" \\
+  -H "Content-Type: application/json" \\
+  -d '{
+    "course_id": "실제 강의 UUID",
+    "type_key": "free_chat",
+    "name": "AI 수익화 클래스 무료단톡방",
+    "slot_urls": { "chat": "https://open.kakao.com/o/abc123", "youtube": null, "zoom": null }
+  }'`}</Code>
+        <p className="muted small">응답은 일반 발급과 같고 <code>active_slot</code>(지금 연결된 전환 키)과 <code>slots</code>가 더 붙습니다.</p>
+
+        <h3>2. 주소 채우기 — <code>PUT /api/v1/short-links/slots</code></h3>
+        <Code>{`curl -X PUT ${BASE}/api/v1/short-links/slots \\
+  -H "Authorization: Bearer $BZUP_API_KEY" \\
+  -H "Content-Type: application/json" \\
+  -d '{ "course_id": "실제 강의 UUID", "type_key": "free_chat",
+        "slot": "youtube", "destination_url": "https://www.youtube.com/live/abc" }'`}</Code>
+        <table className="table small">
+          <thead><tr><th>필드</th><th>필수</th><th>설명</th></tr></thead>
+          <tbody>
+            <tr><td><code>course_id</code>, <code>type_key</code></td><td>예</td><td>대상 짧은 주소</td></tr>
+            <tr><td><code>slot</code></td><td>예</td><td>전환 키 (예: <code>youtube</code>)</td></tr>
+            <tr><td><code>destination_url</code></td><td>예</td><td>채울 주소. <code>null</code>이면 비웁니다 (연결 중인 주소는 비울 수 없음)</td></tr>
+            <tr><td><code>activate</code></td><td>아니오</td><td><code>true</code>면 채우고 바로 전환합니다 (기본 <code>false</code>)</td></tr>
+          </tbody>
+        </table>
+
+        <h3>3. 전환 — <code>POST /api/v1/short-links/switch</code></h3>
+        <Code>{`# 라이브 시작
+curl -X POST ${BASE}/api/v1/short-links/switch \\
+  -H "Authorization: Bearer $BZUP_API_KEY" \\
+  -H "Content-Type: application/json" \\
+  -d '{ "course_id": "실제 강의 UUID", "type_key": "free_chat", "slot": "youtube" }'
+
+# 라이브 종료 → 단톡방으로
+  -d '{ "course_id": "실제 강의 UUID", "type_key": "free_chat", "slot": "chat" }'`}</Code>
+
+        <h3>상태 조회 — <code>GET /api/v1/short-links?course_id=&amp;type_key=</code></h3>
+        <p className="muted small">채우기·전환 응답도 같은 형식이며 <code>changed_fields</code>가 붙습니다.</p>
+        <Code>{`{
+  "data": {
+    "link_id": "76cb8534-125a-45f9-9081-e37e6b4805f4",
+    "short_url": "${BASE}/Ab3dE7x",
+    "short_code": "Ab3dE7x",
+    "course_id": "3f6c8c23-9e12-4c75-a4d2-6425ddcd2101",
+    "type_key": "free_chat",
+    "type_label": "무료단톡방",
+    "name": "AI 수익화 클래스 무료단톡방",
+    "status": "active",
+    "destination_url": "https://www.youtube.com/live/abc",
+    "switchable": true,
+    "active_slot": "youtube",
+    "active_slot_label": "유튜브 라이브",
+    "slots": [
+      { "key": "chat", "label": "단톡방", "destination_url": "https://open.kakao.com/o/abc123" },
+      { "key": "youtube", "label": "유튜브 라이브", "destination_url": "https://www.youtube.com/live/abc" },
+      { "key": "zoom", "label": "줌 라이브", "destination_url": null }
+    ],
+    "updated_at": "2026-11-27T11:00:00Z",
+    "changed_fields": ["active_slot", "destination_url"]
+  }
+}`}</Code>
+
         <h2 id="idempotency">멱등성</h2>
         <ul className="small">
           <li><code>Idempotency-Key</code>는 선택입니다. 응답을 받지 못해 다시 보낼 때 <strong>같은 키·같은 본문</strong>을 쓰면 원래 응답(201)을 그대로 돌려주고 링크를 추가로 만들지 않습니다.</li>
@@ -177,6 +264,10 @@ export default function ApiDocsPage() {
             <tr><td>403</td><td><code>INSUFFICIENT_SCOPE</code></td><td>키 권한 부족</td></tr>
             <tr><td>409</td><td><code>LINK_TYPE_EXISTS</code></td><td>같은 강의·유형의 링크 존재 (기존 주소는 <code>details</code>)</td></tr>
             <tr><td>409</td><td><code>IDEMPOTENCY_KEY_REUSED</code></td><td>같은 Idempotency-Key로 다른 본문을 보냄</td></tr>
+            <tr><td>409</td><td><code>SLOT_EMPTY</code></td><td>비어 있는 전환 주소로 전환, 또는 연결 중인 주소를 비우려 함</td></tr>
+            <tr><td>404</td><td><code>NOT_FOUND</code></td><td>(전환형) 이 강의에 해당 유형의 짧은 주소가 없음</td></tr>
+            <tr><td>422</td><td><code>UNKNOWN_SLOT</code></td><td>(전환형) 유형에 없는 전환 키</td></tr>
+            <tr><td>422</td><td><code>LINK_NOT_SWITCHABLE</code></td><td>(전환형) 전환형 유형으로 만든 링크가 아님</td></tr>
             <tr><td>422</td><td><code>COURSE_REQUIRED</code></td><td>강의 UUID 누락, 없거나 접근할 수 없는 강의</td></tr>
             <tr><td>422</td><td><code>COURSE_NOT_ACTIVE</code></td><td>종료 등 발급할 수 없는 상태의 강의</td></tr>
             <tr><td>422</td><td><code>UNKNOWN_LINK_TYPE</code></td><td>형식은 맞지만 등록되지 않은 <code>type_key</code></td></tr>

@@ -3,6 +3,8 @@ import type { listLinks } from '@/lib/services/link-query';
 import { formatKst } from '@/lib/time';
 import { StatusPill } from '@/components/TopBar';
 import { CopyButton } from '@/components/CopyButton';
+import { SlotQuickSwitch, type QuickSlot } from '@/components/SlotQuickSwitch';
+import { linkEtag } from '@/lib/etag';
 
 const CREATION_LABEL = { single: '단건', batch: '자동생성', tracking: '트래킹' } as const;
 
@@ -23,8 +25,8 @@ function MiddleEllipsis({ text }: { text: string }) {
 
 type LinkItem = Awaited<ReturnType<typeof listLinks>>['data'][number];
 
-/** 링크 목록 표 (링크 목록·강의별 링크 화면 공용). showCourse=false 면 강의 열을 숨긴다. */
-export function LinksTable({ links, showCourse = true }: { links: LinkItem[]; showCourse?: boolean }) {
+/** 링크 목록 표 (링크 목록·강의별 링크 화면 공용). showCourse=false 면 강의 열을 숨긴다. canWrite 면 전환 주소를 바로 전환할 수 있다. */
+export function LinksTable({ links, showCourse = true, canWrite = false }: { links: LinkItem[]; showCourse?: boolean; canWrite?: boolean }) {
   return (
     <div className="table-wrap">
       <table className="table">
@@ -44,7 +46,21 @@ export function LinksTable({ links, showCourse = true }: { links: LinkItem[]; sh
               <td className="nowrap"><span className="short"><code>{l.short_url.replace(/^https?:\/\//, '')}</code><CopyButton text={l.short_url} /></span></td>
               <td className="col-dest">
                 <span className="dest">
-                  {l.active_slot_label && <span className="pill on plain">{l.active_slot_label}</span>}
+                  {(() => {
+                    const slots = (l as { destination_slots?: QuickSlot[] }).destination_slots;
+                    if (slots) {
+                      return (
+                        <SlotQuickSwitch
+                          linkId={l.id}
+                          etag={linkEtag(l.id, l.version, l.url_config_version)}
+                          slots={slots}
+                          activeSlot={l.active_slot}
+                          readOnly={!canWrite}
+                        />
+                      );
+                    }
+                    return l.active_slot_label ? <span className="pill on plain">{l.active_slot_label}</span> : null;
+                  })()}
                   <MiddleEllipsis text={l.destination_url} />
                   <CopyButton text={l.destination_url} ariaLabel="현재 목적지 복사" />
                 </span>

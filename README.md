@@ -127,6 +127,19 @@ PRD 23.1의 개발 순서를 따릅니다. 각 단계 진행 상황은 아래와
 - 같은 강의·유형은 링크 1개 (DB 고유 인덱스 `links_course_type_key_unique`, 409 `LINK_TYPE_EXISTS` 로 기존 주소 반환)
 - 유형 관리(운영자 전용): `npm run types[:prod] -- list | add <key> "<label>" | rename <key> "<label>" | deactivate <key> | activate <key>`
   - key 변경·삭제 불가(DB 트리거), 삭제 대신 비활성화, key 재사용 금지
+  - 전환형 유형 구성: `npm run types[:prod] -- slots <key> "chat=단톡방,youtube=유튜브 라이브,zoom=줌 라이브"` (`none` 이면 일반 유형). 관리 화면 `/admin/link-types` 에서도 가능
+
+## 전환형 짧은 주소 (단톡방 → 유튜브 라이브 → 줌)
+
+- 유형에 전환 주소 구성(2~5개)을 정해 두면 그 유형의 짧은 주소는 전환 주소를 갖는다. 기본 제공: `free_chat`(무료단톡방) = `chat` 단톡방 / `youtube` 유튜브 라이브 / `zoom` 줌 라이브
+- 만들 때는 첫 주소만 필수, 나머지는 비워 두었다가 나중에 채운다. **지금 연결 중인 주소는 항상 채워져 있다** (빈 주소로 전환·연결 중인 주소 비우기는 409 `SLOT_EMPTY`)
+- 화면: `/links/new` 에서 유형 선택 → 주소 칸 / 링크 목록의 연결 주소 표시(`단톡방 ▾`)를 눌러 바로 전환, 빈 주소는 입력 후 [저장]·[저장하고 전환] / 상세 화면의 전환 주소
+- API (강의 UUID + type_key 로 찾음, 링크 ID·ETag 불필요, 반복 호출 안전)
+  - 생성 `POST /api/v1/short-links` + `slot_urls: { chat: URL, youtube: null, zoom: null }`
+  - 상태 `GET /api/v1/short-links?course_id=&type_key=` (`links:read`)
+  - 채우기·바꾸기·비우기 `PUT /api/v1/short-links/slots` `{ course_id, type_key, slot, destination_url, activate? }` (`links:update`)
+  - 전환 `POST /api/v1/short-links/switch` `{ course_id, type_key, slot }` (`links:update`)
+- 구성은 그 유형으로 링크를 만들기 전까지만 바꿀 수 있다. 마이그레이션 `20261127000000_switchable_link_types.sql`
 - 전환 마이그레이션 `20261126010000_short_link_type_key.sql` 은 **기존 발급 링크 전체와 종속 데이터를 삭제**한다 (테스트 기간 결정, 비가역).
   강의·직원·API 키·코드 원장은 유지. 대시보드 전달 문서: `docs/dashboard-short-link-type-key-handoff.md`
 

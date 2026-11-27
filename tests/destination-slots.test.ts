@@ -63,9 +63,9 @@ describe('전환 주소 링크 생성', () => {
     expect(link.destination_url).toBe(CHAT);
     expect(Number(link.active_slot)).toBe(0);
     expect(slots).toEqual([
-      { position: 0, label: '단톡방', destination_url: CHAT },
-      { position: 1, label: '라이브 유튜브', destination_url: LIVE },
-      { position: 2, label: '앵콜 줌', destination_url: null },
+      { position: 0, label: '단톡방', destination_url: CHAT, slot_key: null },
+      { position: 1, label: '라이브 유튜브', destination_url: LIVE, slot_key: null },
+      { position: 2, label: '앵콜 줌', destination_url: null, slot_key: null },
     ]);
     expect((await env.db.query(`select count(*)::int as n from bzup.links`))[0]).toEqual({ n: 1 });
     const list = await listLinks(env.db, editor, {});

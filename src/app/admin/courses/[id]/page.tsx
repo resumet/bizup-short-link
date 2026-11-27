@@ -71,7 +71,7 @@ export default async function CourseLinksPage({ params, searchParams }: {
         {result.data.length === 0 ? (
           <div className="card empty"><p>이 강의에 연결된 링크가 없습니다.</p></div>
         ) : (
-          <LinksTable links={result.data} showCourse={false} />
+          <LinksTable links={result.data} showCourse={false} canWrite />
         )}
         {result.pagination.has_more && (
           <div className="actions" style={{ justifyContent: 'center', marginTop: '1.25rem' }}>

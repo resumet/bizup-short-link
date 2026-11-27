@@ -32,11 +32,14 @@ beforeEach(async () => {
 });
 
 describe('유형 조회', () => {
-  it('초기 유형 landing·payment, key 오름차순, 숫자 필드 없음, 생성용 키로 조회 가능', async () => {
+  it('초기 유형 free_chat·landing·payment, key 오름차순, 숫자 필드 없음, 생성용 키로 조회 가능', async () => {
     const types = await listShortLinkTypes(env.db, api);
     expect(types).toEqual([
-      { key: 'landing', label: '기본 랜딩 QR', active: true },
-      { key: 'payment', label: '결제페이지 QR', active: true },
+      { key: 'free_chat', label: '무료단톡방', active: true, slots: [
+        { key: 'chat', label: '단톡방' }, { key: 'youtube', label: '유튜브 라이브' }, { key: 'zoom', label: '줌 라이브' },
+      ] },
+      { key: 'landing', label: '기본 랜딩 QR', active: true, slots: null },
+      { key: 'payment', label: '결제페이지 QR', active: true, slots: null },
     ]);
   });
 
@@ -46,7 +49,7 @@ describe('유형 조회', () => {
     await expect(env.db.query(`delete from bzup.short_link_types where key = 'payment'`)).rejects.toThrow();
     await expect(env.db.query(`insert into bzup.short_link_types (key, label) values ('Bad', 'x')`)).rejects.toThrow();
     await env.db.query(`update bzup.short_link_types set label = '결제 QR', active = false where key = 'payment'`);
-    expect((await listShortLinkTypes(env.db, api))[1]).toEqual({ key: 'payment', label: '결제 QR', active: false });
+    expect((await listShortLinkTypes(env.db, api))[2]).toEqual({ key: 'payment', label: '결제 QR', active: false, slots: null });
   });
 });
 
@@ -156,7 +159,7 @@ describe('유형 관리 (최고관리자)', () => {
     await createTypedShortLink(env.db, api, body({ type_key: 'landing' }), ctx());
     expect((await err(deleteLinkType(env.db, owner, 'landing', k(), 'r'))).code).toBe('CONFLICT');
     await deleteLinkType(env.db, owner, 'replay', k(), 'r');
-    expect((await listLinkTypesForAdmin(env.db)).map((t) => t.key)).toEqual(['landing', 'payment']);
+    expect((await listLinkTypesForAdmin(env.db)).map((t) => t.key)).toEqual(['free_chat', 'landing', 'payment']);
 
     const editor = await env.addUser('editor');
     expect((await err(createLinkType(env.db, editor, { key: 'x', label: 'x' }, k(), 'r'))).code).toBe('INSUFFICIENT_PERMISSION');

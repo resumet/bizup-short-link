@@ -57,12 +57,12 @@ export interface LinkRow {
   active_slot: number | null;
 }
 
-export interface LinkSlot { position: number; label: string; destination_url: string | null }
+export interface LinkSlot { position: number; label: string; destination_url: string | null; slot_key: string | null }
 
-/** 링크의 전환 주소 (없으면 null) */
+/** 링크의 전환 주소 (없으면 null). slot_key 는 유형으로 만든 링크만 있다 */
 export async function loadSlots(q: Queryable, linkId: string): Promise<LinkSlot[] | null> {
   const rows = await q.query<LinkSlot>(
-    `select position, label, destination_url from bzup.link_destination_slots where link_id = $1 order by position`,
+    `select position, label, destination_url, slot_key from bzup.link_destination_slots where link_id = $1 order by position`,
     [linkId],
   );
   return rows.length ? rows.map((r) => ({ ...r, position: Number(r.position) })) : null;
@@ -135,8 +135,10 @@ export interface SingleCreateInput {
   reviewToken: string | null;
   decision: 'create_new' | null;
   raw: Record<string, unknown>;
-  /** 짧은 주소 유형 4자리 (강의당 유형별 1개) */
+  /** 짧은 주소 유형 key (강의당 유형별 1개) */
   linkType?: string | null;
+  /** 전환형 유형: 유형 구성 순서의 전환 주소 (0번 = destination, 나머지는 null 가능) */
+  slots?: { key: string; label: string; url: ParsedDestination | null }[] | null;
 }
 
 function parseReviewFields(body: Record<string, unknown>) {
@@ -283,8 +285,8 @@ class RetryFromEntry extends Error {}
 
 interface PlannedRow extends DupInputRow {
   linkId: string;
-  /** 전환 주소: 라벨·URL (null = 아직 입력 안 함). 0번이 기본 연결 */
-  slots: { label: string; url: ParsedDestination | null }[] | null;
+  /** 전환 주소: 라벨·URL (null = 아직 입력 안 함). 0번이 기본 연결. key 는 유형으로 만든 링크만 */
+  slots: { label: string; url: ParsedDestination | null; key?: string }[] | null;
   templateItemId: string | null;
   sortOrder: number;
   shortCode?: string;
@@ -490,8 +492,8 @@ async function runCreate(
           if (r.slots) {
             for (const [pos, sl] of r.slots.entries()) {
               await q.query(
-                `insert into bzup.link_destination_slots (link_id, position, label, destination_url) values ($1,$2,$3,$4)`,
-                [link.id, pos, sl.label, sl.url?.stored ?? null],
+                `insert into bzup.link_destination_slots (link_id, position, label, destination_url, slot_key) values ($1,$2,$3,$4,$5)`,
+                [link.id, pos, sl.label, sl.url?.stored ?? null, sl.key ?? null],
               );
             }
           }
@@ -632,7 +634,10 @@ export interface WriteContext {
 
 export async function createSingleLink(db: Db, principal: Principal, input: SingleCreateInput, ctx: WriteContext) {
   requirePermission(principal, 'links:create');
-  const requestHash = hashRequest({ course_specified: input.courseId !== null, body: input.raw, type: input.linkType ?? null });
+  const slotHash = input.slots ? input.slots.map((sl) => [sl.key, sl.url?.stored ?? null]) : null;
+  const requestHash = hashRequest({
+    course_specified: input.courseId !== null, body: input.raw, type: input.linkType ?? null, ...(slotHash ? { slots: slotHash } : {}),
+  });
   const idem = idemContext(principal, 'POST', '/links', ctx.idempotencyKey, requestHash);
   return runCreate(db, principal, {
     mode: 'single',
@@ -643,7 +648,14 @@ export async function createSingleLink(db: Db, principal: Principal, input: Sing
     templateVersion: null,
     rowCount: 1,
     linkType: input.linkType ?? null,
-    buildRows: async () => [plannedFrom('single', 1, input.name, input.destination, input.externalRef, null, 1)],
+    buildRows: async () => {
+      const row = plannedFrom('single', 1, input.name, input.destination, input.externalRef, null, 1);
+      if (input.slots) {
+        row.slots = input.slots.map((sl) => ({ label: sl.label, url: sl.url, key: sl.key }));
+        row.slotUrls = row.slots.map((x) => x.url?.stored ?? null);
+      }
+      return [row];
+    },
   }, idem, ctx.requestId, ctx.apiBase);
 }
 

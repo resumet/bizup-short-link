@@ -113,6 +113,13 @@ export function buildWhere(workspaceId: string, f: LinkFilters, policy: UrlPolic
 
 interface Cursor { t: string; i: string; f: string }
 
+type SlotJson = { position: number; label: string; destination_url: string | null; slot_key: string | null };
+/** 전환 주소 목록 (드라이버에 따라 json 이 문자열로 올 수 있다) */
+function slotsOf(v: SlotJson[] | string): SlotJson[] {
+  const arr = typeof v === 'string' ? (JSON.parse(v) as SlotJson[]) : v;
+  return arr.map((x) => ({ ...x, position: Number(x.position) }));
+}
+
 function filterFingerprint(f: LinkFilters): string {
   return hashRequest(f).toString('base64url').slice(0, 16);
 }
@@ -146,11 +153,16 @@ export async function listLinks(q: Queryable, principal: Principal, query: Recor
     where += ` and (l.created_at, l.id) < ($${params.length - 1}::timestamptz, $${params.length}::uuid)`;
   }
   params.push(limit + 1);
-  const rows = await q.query<LinkRow & { course_name: string | null; course_status: string | null; created_at_text: string; total_views: number; active_slot_label: string | null; type_label: string | null }>(
+  const rows = await q.query<LinkRow & { course_name: string | null; course_status: string | null; created_at_text: string; total_views: number; active_slot_label: string | null; type_label: string | null;
+    slots_json: { position: number; label: string; destination_url: string | null; slot_key: string | null }[] | string | null }>(
     `select ${LINK_COLUMNS}, c.name as course_name, c.status as course_status, l.created_at::text as created_at_text,
             coalesce(vt.total_views, 0)::bigint as total_views,
             (select t.label from bzup.short_link_types t where t.key = l.type_key) as type_label,
-            (select ds.label from bzup.link_destination_slots ds where ds.link_id = l.id and ds.position = l.active_slot) as active_slot_label
+            (select ds.label from bzup.link_destination_slots ds where ds.link_id = l.id and ds.position = l.active_slot) as active_slot_label,
+            case when l.active_slot is not null then (
+              select json_agg(json_build_object('position', ds.position, 'label', ds.label, 'destination_url', ds.destination_url,
+                                                'slot_key', ds.slot_key) order by ds.position)
+                from bzup.link_destination_slots ds where ds.link_id = l.id) end as slots_json
        from bzup.links l
        left join bzup.courses c on c.workspace_id = l.workspace_id and c.id = l.course_id
        left join bzup.link_view_totals vt on vt.link_id = l.id
@@ -170,6 +182,7 @@ export async function listLinks(q: Queryable, principal: Principal, query: Recor
       ...serializeLink(r, policy), course_name: r.course_name, course_status: r.course_status, total_views: Number(r.total_views),
       active_slot_label: r.active_slot_label,
       type_label: r.type_label,
+      ...(r.slots_json ? { destination_slots: slotsOf(r.slots_json) } : {}),
     })),
     pagination: { next_cursor: nextCursor, has_more: hasMore, limit },
   };

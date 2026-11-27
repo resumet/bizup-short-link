@@ -98,7 +98,7 @@ export default async function LinksPage({ searchParams }: { searchParams: Promis
           </div>
         )}
         {result && result.data.length > 0 && (
-          <LinksTable links={result.data} />
+          <LinksTable links={result.data} canWrite={canWrite} />
         )}
         {result?.pagination.has_more && (
           <div className="actions" style={{ justifyContent: 'center', marginTop: '1.25rem' }}>

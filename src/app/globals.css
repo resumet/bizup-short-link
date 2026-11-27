@@ -294,6 +294,27 @@ p.warn { background: var(--warning-soft); }
 .mid-ellipsis .head { overflow: hidden; text-overflow: ellipsis; min-width: 1.5em; }
 .mid-ellipsis .tail { flex: none; }
 
+/* 목록에서 바로 전환 */
+.quick-switch { display: inline-flex; flex: none; }
+.quick-switch-trigger { border: 0; cursor: pointer; font: inherit; font-size: 0.75rem; }
+.quick-switch-trigger:hover { filter: brightness(0.96); }
+.quick-switch-trigger:focus-visible { outline: 2px solid var(--accent, currentColor); outline-offset: 2px; }
+.quick-switch-menu {
+  position: fixed; z-index: 60; width: min(360px, calc(100vw - 32px));
+  background: var(--surface); border-radius: var(--radius); box-shadow: var(--shadow-md), 0 0 0 1px var(--line);
+  padding: 0.5rem; display: flex; flex-direction: column; gap: 0.25rem; white-space: normal;
+}
+.qs-row { padding: 0.5rem 0.625rem; border-radius: calc(var(--radius) - 4px); display: flex; flex-direction: column; gap: 0.375rem; }
+.qs-row.active { background: var(--success-soft); }
+.qs-head { display: flex; align-items: center; gap: 0.5rem; font-size: 0.8125rem; }
+.qs-body { display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap; margin: 0; }
+.qs-url { flex: 1 1 10rem; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--muted); font-size: 0.8125rem; }
+.qs-body input { flex: 1 1 100%; }
+.qs-actions { display: flex; gap: 0.375rem; margin-left: auto; }
+.qs-foot { margin: 0.25rem 0.625rem 0.125rem; }
+.slot-fields { border: 1px solid var(--line); border-radius: var(--radius); padding: 0.75rem 1rem 1rem; margin: 0; display: flex; flex-direction: column; gap: 0.75rem; }
+.slot-fields legend { padding: 0 0.375rem; font-weight: 600; font-size: 0.875rem; }
+
 .right { text-align: right !important; }
 
 /* 일자별 조회수 막대 */

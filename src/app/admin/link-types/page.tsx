@@ -15,7 +15,7 @@ export default async function LinkTypesPage() {
   return (
     <div className="page">
       <TopBar me={me} active="linktypes" />
-      <main className="content narrow-content">
+      <main className="content">
         <h1>유형 관리</h1>
         <p className="muted">짧은 주소 API 의 <code>type_key</code> 목록입니다. 같은 강의에는 유형별로 짧은 주소가 하나만 만들어집니다.</p>
         <LinkTypesAdmin types={types} />
