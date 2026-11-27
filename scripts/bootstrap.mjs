@@ -34,8 +34,6 @@ try {
       const [d] = await t`insert into bzup.service_domains (service_namespace_id, hostname, status, kind, verified_at, activated_at)
                           values (${ns}, ${host}, 'active', ${kind}, now(), now()) returning id`;
       await t`insert into bzup.service_settings (service_namespace_id, workspace_id, primary_domain_id) values (${ns}, ${workspaceId}, ${d.id})`;
-      await t`insert into bzup.generation_templates (workspace_id) values (${workspaceId}) on conflict do nothing`;
-      await t`select bzup.ensure_default_template_item(id) from bzup.generation_templates where workspace_id = ${workspaceId}`;
       console.log(`서비스 초기화: 기본 호스트 ${host}`);
     }
     const ownerId = process.env.INITIAL_OWNER_USER_ID;

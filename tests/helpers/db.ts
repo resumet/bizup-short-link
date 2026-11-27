@@ -66,20 +66,6 @@ export async function setupDb() {
     return { principal, plaintext: k.plaintext, clientId: client.id, keyId: key.id };
   }
 
-  async function addTemplate(names: string[]) {
-    const [t] = await db.query<{ id: string }>(
-      `insert into bzup.generation_templates (workspace_id) values ($1) returning id`, [workspaceId],
-    );
-    const items: { id: string; name: string }[] = [];
-    for (const [i, name] of names.entries()) {
-      const [it] = await db.query<{ id: string }>(
-        `insert into bzup.generation_template_items (workspace_id, template_id, name, sort_order) values ($1,$2,$3,$4) returning id`,
-        [workspaceId, t.id, name, i + 1],
-      );
-      items.push({ id: it.id, name });
-    }
-    return { id: t.id, version: 1, items };
-  }
 
-  return { db, ledger, workspaceId, addUser, addCourse, addApiKey, addTemplate };
+  return { db, ledger, workspaceId, addUser, addCourse, addApiKey };
 }

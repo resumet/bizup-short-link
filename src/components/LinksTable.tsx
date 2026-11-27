@@ -6,7 +6,7 @@ import { CopyButton } from '@/components/CopyButton';
 import { SlotQuickSwitch, type QuickSlot } from '@/components/SlotQuickSwitch';
 import { linkEtag } from '@/lib/etag';
 
-const CREATION_LABEL = { single: '단건', batch: '자동생성', tracking: '트래킹' } as const;
+const CREATION_LABEL = { single: '단건', tracking: '트래킹' } as const;
 
 const TAIL = 18;
 

@@ -8,7 +8,7 @@ import { LinksTable } from '@/components/LinksTable';
 
 export const dynamic = 'force-dynamic';
 
-const PASS = ['q', 'status', 'source', 'creation_mode', 'generation_batch_id', 'created_from', 'created_to'] as const;
+const PASS = ['q', 'status', 'source', 'creation_mode', 'created_from', 'created_to'] as const;
 
 export default async function LinksPage({ searchParams }: { searchParams: Promise<Record<string, string | undefined>> }) {
   const auth = await staffForPage('/links');
@@ -79,13 +79,9 @@ export default async function LinksPage({ searchParams }: { searchParams: Promis
             <option value="single">단건</option>
             <option value="tracking">트래킹</option>
           </select>
-          {sp.generation_batch_id && <input type="hidden" name="generation_batch_id" value={sp.generation_batch_id} />}
           <button className="button" type="submit">검색</button>
           {Object.keys(pageQuery).length > 0 && <Link href="/links" className="button small secondary">초기화</Link>}
         </form>
-        {sp.generation_batch_id && (
-          <div className="chip-note">자동생성 실행 결과만 보고 있습니다 <Link href="/links">전체 보기</Link></div>
-        )}
 
         {error && <p className="error">{error}</p>}
         {result && result.data.length === 0 && (

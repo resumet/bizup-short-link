@@ -35,7 +35,6 @@ export default async function CourseLinksPage({ params, searchParams }: {
   const counts = await db.query<{ kind: string; n: number }>(
     `select case when l.type_key is not null then coalesce(t.label, l.type_key)
                  when l.creation_mode = 'tracking' then '트래킹'
-                 when l.creation_mode = 'batch' then '자동생성'
                  else '일반' end as kind, count(*)::int as n
        from bzup.links l
        left join bzup.short_link_types t on t.key = l.type_key

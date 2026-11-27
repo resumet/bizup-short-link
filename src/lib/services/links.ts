@@ -44,8 +44,7 @@ export interface LinkRow {
   status: 'active' | 'inactive';
   version: number;
   source: 'web' | 'api';
-  creation_mode: 'single' | 'batch' | 'tracking';
-  generation_batch_id: string | null;
+  creation_mode: 'single' | 'tracking';
   created_by_type: string;
   created_by_id: string | null;
   created_by_label: string | null;
@@ -70,7 +69,7 @@ export async function loadSlots(q: Queryable, linkId: string): Promise<LinkSlot[
 
 export const LINK_COLUMNS = `l.id, l.workspace_id, l.issued_domain, l.short_code, l.name, l.initial_destination_url,
   l.destination_url, l.course_id, l.external_ref, l.status, l.version, l.source, l.creation_mode,
-  l.generation_batch_id, l.created_by_type, l.created_by_id, l.created_by_label, l.updated_by_type,
+  l.created_by_type, l.created_by_id, l.created_by_label, l.updated_by_type,
   l.updated_by_id, l.updated_by_label, l.created_at, l.updated_at, l.active_slot, l.type_key`;
 
 export function serializeLink(
@@ -93,7 +92,6 @@ export function serializeLink(
     version: Number(l.version),
     source: l.source,
     creation_mode: l.creation_mode,
-    generation_batch_id: l.generation_batch_id,
     external_ref: l.external_ref,
     created_by: { type: l.created_by_type, id: l.created_by_id, label: l.created_by_label },
     updated_by: { type: l.updated_by_type, id: l.updated_by_id, label: l.updated_by_label },
@@ -343,13 +341,6 @@ async function runCreate(
         await lockWorkspace(q, principal.workspaceId);
         const p = await recheckPrincipal(q, principal, 'links:create');
         const course = await requireActiveCourse(q, p.workspaceId, resolvedCourseId);
-        if (plan.mode === 'batch') {
-          const t = await q.query<{ version: number }>(
-            `select version from bzup.generation_templates where workspace_id = $1 and id = $2`,
-            [p.workspaceId, plan.templateId],
-          );
-          if (!t[0] || Number(t[0].version) !== plan.templateVersion) throw new AppError('TEMPLATE_CHANGED');
-        }
         const policy = await loadUrlPolicy(q);
         for (const r of rows) assertRowDestinations(r, policy.serviceHosts);
         await checkExternalRefs(q, p.workspaceId, rows);
@@ -362,19 +353,6 @@ async function runCreate(
         // 7) 저장
         const actor = principalRef(p);
         const source = sourceOf(p);
-        let batchId: string | null = null;
-        if (plan.mode === 'batch') {
-          const b = await q.query<{ id: string }>(
-            `insert into bzup.generation_batches
-               (workspace_id, course_id, template_id, template_version, issued_domain_snapshot,
-                url_config_version_snapshot, count, source, actor_type, actor_id, actor_label_snapshot,
-                api_key_id, request_id)
-             values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13) returning id`,
-            [p.workspaceId, course.id, plan.templateId, plan.templateVersion, policy.primaryHost,
-              policy.urlConfigVersion, rows.length, source, actor.type, actor.id, actor.label, actor.apiKeyId, requestId],
-          );
-          batchId = b[0].id;
-        }
         if (plan.linkType) {
           // 회사 잠금 안에서 확인 → 같은 강의·유형 동시 생성도 1개만 성공 (유니크 인덱스가 최종 보장)
           const dup = await q.query<{ id: string; short_code: string; issued_domain: string }>(
@@ -393,13 +371,13 @@ async function runCreate(
             `insert into bzup.links as l
                (id, workspace_id, issued_domain, short_code, name, initial_destination_url, destination_url,
                 canonical_destination, destination_fingerprint, course_id, external_ref, status, version, source,
-                creation_mode, generation_batch_id, created_by_type, created_by_id, created_by_label,
+                creation_mode, created_by_type, created_by_id, created_by_label,
                 created_api_key_id, updated_by_type, updated_by_id, updated_by_label, created_at, updated_at, active_slot, type_key)
-             values ($1,$2,$3,$4,$5,$6,$6,$7,$8,$9,$10,'active',1,$11,$12,$13,$14,$15,$16,$17,$14,$15,$16,
-                     clock_timestamp(), clock_timestamp(), $18, $19)
+             values ($1,$2,$3,$4,$5,$6,$6,$7,$8,$9,$10,'active',1,$11,$12,$13,$14,$15,$16,$13,$14,$15,
+                     clock_timestamp(), clock_timestamp(), $17, $18)
              returning ${LINK_COLUMNS}`,
             [r.linkId, p.workspaceId, policy.primaryHost, r.shortCode, r.name, r.stored, r.canonical, r.fingerprint,
-              course.id, r.externalRef, source, plan.mode, batchId, actor.type, actor.id, actor.label, actor.apiKeyId,
+              course.id, r.externalRef, source, plan.mode, actor.type, actor.id, actor.label, actor.apiKeyId,
               r.slots ? 0 : null, plan.mode === 'single' ? plan.linkType ?? null : null],
           );
           const link = ins[0];
@@ -415,24 +393,15 @@ async function runCreate(
           await q.query(
             `insert into bzup.link_revisions
                (workspace_id, link_id, version, action, changed_fields, before_snapshot, after_snapshot,
-                actor_type, actor_id, actor_label_snapshot, api_key_id, generation_batch_id, request_id, created_at)
-             values ($1,$2,1,'created',$3,null,$4::text::jsonb,$5,$6,$7,$8,$9,$10, $11)`,
+                actor_type, actor_id, actor_label_snapshot, api_key_id, request_id, created_at)
+             values ($1,$2,1,'created',$3,null,$4::text::jsonb,$5,$6,$7,$8,$9,$10)`,
             [p.workspaceId, link.id, ['name', 'destination_url', 'course_id', 'status'],
               JSON.stringify({ name: link.name, destination_url: link.destination_url, course_id: course.id,
                 course_name_snapshot: course.name, status: 'active',
                 ...(r.slots ? { active_slot: 0, active_slot_label: r.slots[0].label,
                   destination_slots: r.slots.map((x) => ({ label: x.label, destination_url: x.url?.stored ?? null })) } : {}) }),
-              actor.type, actor.id, actor.label, actor.apiKeyId, batchId, requestId, link.created_at],
+              actor.type, actor.id, actor.label, actor.apiKeyId, requestId, link.created_at],
           );
-          if (batchId) {
-            await q.query(
-              `insert into bzup.generation_batch_items
-                 (batch_id, template_item_id, link_id, name_snapshot, destination_url_snapshot, short_url_snapshot, sort_order)
-               values ($1,$2,$3,$4,$5,$6,$7)`,
-              [batchId, r.templateItemId, link.id, link.name, link.destination_url,
-                shortUrlFor(policy.primaryHost, link.short_code), r.sortOrder],
-            );
-          }
         }
         if (reviewId) await consumeReview(q, reviewId, requestId);
 
@@ -454,7 +423,6 @@ async function runCreate(
         await saveSuccess(q, idem, resp, {
           resolvedCourseId: course.id,
           resultLinkId: plan.mode === 'single' ? created[0].id : null,
-          resultBatchId: batchId,
         });
         return { ...resp, replayed: false };
       });
@@ -586,10 +554,10 @@ export async function getLinkRevisions(q: Queryable, principal: Principal, id: s
   const rows = await q.query<{
     version: number; action: string; changed_fields: string[]; before_snapshot: unknown; after_snapshot: unknown;
     actor_type: string; actor_id: string | null; actor_label_snapshot: string | null; api_key_id: string | null;
-    generation_batch_id: string | null; request_id: string | null; reason: string | null; created_at: Date;
+    request_id: string | null; reason: string | null; created_at: Date;
   }>(
     `select version, action, changed_fields, before_snapshot, after_snapshot, actor_type, actor_id, actor_label_snapshot,
-            api_key_id, generation_batch_id, request_id, reason, created_at
+            api_key_id, request_id, reason, created_at
        from bzup.link_revisions where workspace_id = $1 and link_id = $2 order by version desc`,
     [principal.workspaceId, id],
   );
@@ -600,7 +568,6 @@ export async function getLinkRevisions(q: Queryable, principal: Principal, id: s
     before: r.before_snapshot,
     after: r.after_snapshot,
     actor: { type: r.actor_type, id: r.actor_id, label: r.actor_label_snapshot, api_key_id: r.api_key_id },
-    generation_batch_id: r.generation_batch_id,
     request_id: r.request_id,
     reason: r.reason,
     created_at: toIso(r.created_at),
@@ -612,7 +579,7 @@ export async function getLinkRevisions(q: Queryable, principal: Principal, id: s
 // ---------------------------------------------------------------------------
 const PATCHABLE = ['name', 'destination_url', 'course_id', 'status', 'active_slot', 'slot_urls'] as const;
 const IMMUTABLE = ['id', 'short_code', 'issued_domain', 'issued_short_url', 'domain', 'short_url', 'initial_destination_url',
-  'source', 'creation_mode', 'generation_batch_id', 'external_ref', 'version', 'created_at', 'updated_at', 'url_config_version'];
+  'source', 'creation_mode', 'external_ref', 'version', 'created_at', 'updated_at', 'url_config_version'];
 
 export interface PatchInput {
   name?: string;

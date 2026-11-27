@@ -16,14 +16,13 @@ export interface LinkFilters {
   course_unassigned?: boolean;
   status?: 'active' | 'inactive';
   source?: 'web' | 'api';
-  creation_mode?: 'single' | 'batch' | 'tracking';
-  generation_batch_id?: string;
+  creation_mode?: 'single' | 'tracking';
   created_from?: string;
   created_to?: string;
 }
 
 const FILTER_KEYS = ['q', 'short_code', 'external_ref', 'course_id', 'course_unassigned', 'status', 'source',
-  'creation_mode', 'generation_batch_id', 'created_from', 'created_to'] as const;
+  'creation_mode', 'created_from', 'created_to'] as const;
 
 function isoDate(v: string, field: string): string {
   const d = new Date(v);
@@ -61,11 +60,7 @@ export function parseFilters(src: Record<string, unknown>, extraAllowed: string[
   if (f.course_id && f.course_unassigned) throw validationError('course_id와 course_unassigned=true는 함께 사용할 수 없습니다.');
   if (s('status')) f.status = oneOf(s('status'), ['active', 'inactive'] as const, 'status');
   if (s('source')) f.source = oneOf(s('source'), ['web', 'api'] as const, 'source');
-  if (s('creation_mode')) f.creation_mode = oneOf(s('creation_mode'), ['single', 'batch', 'tracking'] as const, 'creation_mode');
-  if (s('generation_batch_id')) {
-    if (!UUID_RE.test(s('generation_batch_id')!)) throw validationError('generation_batch_id 형식이 올바르지 않습니다.');
-    f.generation_batch_id = s('generation_batch_id')!.toLowerCase();
-  }
+  if (s('creation_mode')) f.creation_mode = oneOf(s('creation_mode'), ['single', 'tracking'] as const, 'creation_mode');
   if (s('created_from')) f.created_from = isoDate(s('created_from')!, 'created_from');
   if (s('created_to')) f.created_to = isoDate(s('created_to')!, 'created_to');
   return f;
@@ -105,7 +100,6 @@ export function buildWhere(workspaceId: string, f: LinkFilters, policy: UrlPolic
   if (f.status) w.push(`l.status = ${p(f.status)}`);
   if (f.source) w.push(`l.source = ${p(f.source)}`);
   if (f.creation_mode) w.push(`l.creation_mode = ${p(f.creation_mode)}`);
-  if (f.generation_batch_id) w.push(`l.generation_batch_id = ${p(f.generation_batch_id)}`);
   if (f.created_from) w.push(`l.created_at >= ${p(f.created_from)}::timestamptz`);
   if (f.created_to) w.push(`l.created_at < ${p(f.created_to)}::timestamptz`);
   return w.join(' and ');

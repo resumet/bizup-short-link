@@ -25,16 +25,6 @@ try {
               values (${ws}, '신민철 강의', '신민철', 'active', ${actor})`;
   }
 
-  const [tpl] = await sql`select id, version from bzup.generation_templates where workspace_id = ${ws}`;
-  const [{ n }] = await sql`select count(*)::int as n from bzup.generation_template_items where template_id = ${tpl.id}`;
-  if (n === 0) {
-    const names = ['무료 웨비나 신청', '사전 안내 블로그', '단체 채팅방 입장', '라이브 입장', '유료 강의 신청'];
-    for (const [i, name] of names.entries()) {
-      await sql`insert into bzup.generation_template_items (workspace_id, template_id, name, sort_order)
-                values (${ws}, ${tpl.id}, ${name}, ${i + 1})`;
-    }
-  }
-
   // 시스템 API 연동(회사당 1개)을 재사용하거나 만든다
   let [client] = await sql`select id from bzup.api_clients where workspace_id = ${ws} and is_system and status <> 'deleted'`;
   if (!client) {

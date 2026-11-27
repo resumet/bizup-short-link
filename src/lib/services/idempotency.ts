@@ -81,7 +81,6 @@ export async function saveSuccess(
   extra: {
     resolvedCourseId?: string | null;
     resultLinkId?: string | null;
-    resultBatchId?: string | null;
     resultObjectType?: string | null;
     resultObjectId?: string | null;
   } = {},
@@ -97,12 +96,12 @@ export async function saveSuccess(
     `insert into bzup.idempotency_records
        (workspace_id, principal_type, principal_id, method, route, key_hash, normalized_request_hash,
         resolved_course_id, response_status, response_body, response_headers,
-        result_link_id, result_batch_id, result_object_type, result_object_id, expires_at)
-     values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11::text::jsonb,$12,$13,$14,$15, now() + interval '24 hours')`,
+        result_link_id, result_object_type, result_object_id, expires_at)
+     values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11::text::jsonb,$12,$13,$14, now() + interval '24 hours')`,
     [
       c.workspaceId, c.principalType, c.principalId, c.method, c.route, c.keyHash, c.requestHash,
       extra.resolvedCourseId ?? null, resp.status, JSON.stringify(resp.body), JSON.stringify(resp.headers),
-      extra.resultLinkId ?? null, extra.resultBatchId ?? null, extra.resultObjectType ?? null, extra.resultObjectId ?? null,
+      extra.resultLinkId ?? null, extra.resultObjectType ?? null, extra.resultObjectId ?? null,
     ],
   );
 }
