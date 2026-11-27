@@ -187,91 +187,6 @@ function collect(e: unknown, errors: RowError[], field: string, extra: Partial<R
   throw e;
 }
 
-export interface BatchCreateInput {
-  courseId: string | null;
-  templateId: string;
-  templateVersion: number;
-  items: {
-    templateItemId: string;
-    destination: ParsedDestination;
-    externalRef: string | null;
-    /** 전환 주소 항목: 템플릿 라벨 순서의 URL (0번 필수, 나머지는 null 가능) */
-    slotUrls: (ParsedDestination | null)[] | null;
-  }[];
-  reviewToken: string | null;
-  decision: 'create_new' | null;
-  raw: Record<string, unknown>;
-}
-
-const MAX_SLOT_URLS = 5;
-
-function parseSlotUrls(raw: unknown, errors: RowError[], extra: Partial<RowError>): (ParsedDestination | null)[] | null {
-  if (!Array.isArray(raw) || raw.length < 2 || raw.length > MAX_SLOT_URLS) {
-    errors.push({ field: 'slot_urls', message: '전환 주소 목록 형식이 올바르지 않습니다.', ...extra });
-    return null;
-  }
-  return raw.map((u, i) => {
-    if ((u === null || u === undefined || (typeof u === 'string' && u.trim() === '')) && i > 0) return null;
-    try {
-      return parseDestination(u);
-    } catch (e) {
-      collect(e, errors, `slot_urls[${i}]`, extra);
-      return null;
-    }
-  });
-}
-
-export function parseBatchCreateBody(body: unknown): BatchCreateInput {
-  if (!isObject(body)) throw new AppError('INVALID_JSON');
-  assertAllowedFields(body, ['course_id', 'template_id', 'template_version', 'items', 'review_token', 'duplicate_decision']);
-  const templateId = uuidField(body.template_id, 'template_id');
-  if (!Number.isInteger(body.template_version) || (body.template_version as number) < 1) {
-    throw validationError('template_version이 올바르지 않습니다.');
-  }
-  if (!Array.isArray(body.items) || body.items.length < 1 || body.items.length > 100) {
-    throw new AppError('TEMPLATE_ITEMS_MISMATCH', '자동생성 항목은 1~100개여야 합니다.');
-  }
-  const errors: RowError[] = [];
-  const items: BatchCreateInput['items'] = [];
-  const seen = new Set<string>();
-  body.items.forEach((it, idx) => {
-    if (!isObject(it)) throw validationError(`${idx + 1}번째 항목 형식이 올바르지 않습니다.`);
-    assertAllowedFields(it, ['template_item_id', 'destination_url', 'slot_urls', 'external_ref']);
-    const templateItemId = uuidField(it.template_item_id, 'template_item_id');
-    if (seen.has(templateItemId)) throw new AppError('TEMPLATE_ITEMS_MISMATCH', '같은 항목이 두 번 포함되어 있습니다.');
-    seen.add(templateItemId);
-    let destination: ParsedDestination | null = null;
-    let slotUrls: (ParsedDestination | null)[] | null = null;
-    if (it.slot_urls !== undefined) {
-      if (it.destination_url !== undefined) throw validationError('destination_url과 slot_urls는 함께 보낼 수 없습니다.');
-      const before = errors.length;
-      slotUrls = parseSlotUrls(it.slot_urls, errors, { template_item_id: templateItemId, row: idx + 1 });
-      if (slotUrls && errors.length === before) destination = slotUrls[0];
-    } else {
-      try { destination = parseDestination(it.destination_url); } catch (e) {
-        collect(e, errors, 'destination_url', { template_item_id: templateItemId, row: idx + 1 });
-      }
-    }
-    let externalRef: string | null = null;
-    try { externalRef = externalRefField(it.external_ref); } catch (e) {
-      collect(e, errors, 'external_ref', { template_item_id: templateItemId, row: idx + 1 });
-    }
-    items.push({ templateItemId, destination: destination!, externalRef, slotUrls });
-  });
-  if (errors.length) throw validationError('자동생성 목록의 주소를 확인해 주세요.', errors);
-  const refs = items.map((i) => i.externalRef).filter((r): r is string => r !== null);
-  if (new Set(refs).size !== refs.length) throw new AppError('EXTERNAL_REF_EXISTS', '같은 external_ref가 요청 안에 중복되어 있습니다.');
-  const courseId = body.course_id === undefined ? null : uuidField(body.course_id, 'course_id');
-  return {
-    courseId,
-    templateId,
-    templateVersion: body.template_version as number,
-    items,
-    ...parseReviewFields(body),
-    raw: body,
-  };
-}
-
 // ---------------------------------------------------------------------------
 // 생성 공통 처리 (§16.3)
 // ---------------------------------------------------------------------------
@@ -533,13 +448,8 @@ async function runCreate(
             },
           };
         } else {
-          resp = {
-            status: 201,
-            body: {
-              data: await batchBody(q, p.workspaceId, batchId!),
-            },
-            headers: { Location: `${apiBase}/link-batches/${batchId}` },
-          };
+          // 자동생성(배치) 기능은 제거됨
+          throw new AppError('INTERNAL_ERROR');
         }
         await saveSuccess(q, idem, resp, {
           resolvedCourseId: course.id,
@@ -576,48 +486,6 @@ function plannedFrom(rowId: string, rowNumber: number, name: string, d: ParsedDe
     rowId, rowNumber, name, stored: d.stored, canonical: d.canonical, fingerprint: d.fingerprint, externalRef,
     linkId: randomUUID(), templateItemId, sortOrder, slots: null,
   };
-}
-
-/** 이름 목록 버전·활성 항목 구성과 요청 행을 대조해 생성할 행을 만든다 (생성·프리플라이트 공용) */
-async function buildBatchRows(q: Queryable, workspaceId: string, input: BatchCreateInput): Promise<PlannedRow[]> {
-  const t = await q.query<{ id: string; version: number }>(
-    `select id, version from bzup.generation_templates where workspace_id = $1 and id = $2`,
-    [workspaceId, input.templateId],
-  );
-  if (!t[0]) throw new AppError('NOT_FOUND', '자동생성 목록을 찾을 수 없습니다.');
-  if (Number(t[0].version) !== input.templateVersion) throw new AppError('TEMPLATE_CHANGED');
-  const items = await q.query<{ id: string; name: string; sort_order: number; destination_slots: string[] | null }>(
-    `select id, name, sort_order, destination_slots from bzup.generation_template_items
-      where template_id = $1 and is_active order by sort_order, id`,
-    [input.templateId],
-  );
-  if (items.length === 0) throw new AppError('TEMPLATE_EMPTY');
-  const byId = new Map(input.items.map((i) => [i.templateItemId, i]));
-  const missing = items.filter((i) => !byId.has(i.id)).map((i) => i.id);
-  const extra = input.items.filter((i) => !items.some((t2) => t2.id === i.templateItemId)).map((i) => i.templateItemId);
-  if (missing.length || extra.length) {
-    throw new AppError('TEMPLATE_ITEMS_MISMATCH', '자동생성 목록의 모든 활성 항목을 정확히 한 번씩 보내야 합니다.', {
-      details: { missing_template_item_ids: missing, unknown_template_item_ids: extra },
-    });
-  }
-  return items.map((it, idx) => {
-    const inp = byId.get(it.id)!;
-    const labels = it.destination_slots;
-    if (labels && (!inp.slotUrls || inp.slotUrls.length !== labels.length)) {
-      throw new AppError('TEMPLATE_ITEMS_MISMATCH', `'${it.name}' 항목은 전환 주소 ${labels.length}개(slot_urls)를 보내야 합니다.`, {
-        details: { template_item_id: it.id, destination_slots: labels },
-      });
-    }
-    if (!labels && inp.slotUrls) {
-      throw new AppError('TEMPLATE_ITEMS_MISMATCH', `'${it.name}' 항목은 destination_url 하나만 받습니다.`, { details: { template_item_id: it.id } });
-    }
-    const row = plannedFrom(it.id, idx + 1, it.name, inp.destination, inp.externalRef, it.id, idx + 1);
-    if (labels) {
-      row.slots = labels.map((label, i) => ({ label, url: inp.slotUrls![i] }));
-      row.slotUrls = row.slots.map((x) => x.url?.stored ?? null);
-    }
-    return row;
-  });
 }
 
 /** 기본 목적지와 전환 주소 전체의 금지 목적지 검사 */
@@ -659,61 +527,6 @@ export async function createSingleLink(db: Db, principal: Principal, input: Sing
   }, idem, ctx.requestId, ctx.apiBase);
 }
 
-export async function createBatch(db: Db, principal: Principal, input: BatchCreateInput, ctx: WriteContext) {
-  requirePermission(principal, 'links:create');
-  const requestHash = hashRequest({ course_specified: input.courseId !== null, body: input.raw });
-  const idem = idemContext(principal, 'POST', '/link-batches', ctx.idempotencyKey, requestHash);
-  return runCreate(db, principal, {
-    mode: 'batch',
-    requestedCourseId: input.courseId,
-    reviewToken: input.reviewToken,
-    decision: input.decision,
-    templateId: input.templateId,
-    templateVersion: input.templateVersion,
-    rowCount: input.items.length,
-    buildRows: (q) => buildBatchRows(q, principal.workspaceId, input),
-  }, idem, ctx.requestId, ctx.apiBase);
-}
-
-export async function batchBody(q: Queryable, workspaceId: string, batchId: string) {
-  const b = await q.query<{
-    id: string; course_id: string; template_id: string; template_version: number; status: string; count: number;
-    url_config_version_snapshot: number; issued_domain_snapshot: string; created_at: Date;
-    actor_type: string; actor_id: string; actor_label_snapshot: string; source: string;
-  }>(
-    `select * from bzup.generation_batches where workspace_id = $1 and id = $2`,
-    [workspaceId, batchId],
-  );
-  if (!b[0]) throw new AppError('NOT_FOUND');
-  const items = await q.query<{
-    template_item_id: string; link_id: string; name_snapshot: string; short_url_snapshot: string; destination_url_snapshot: string;
-  }>(
-    `select template_item_id, link_id, name_snapshot, short_url_snapshot, destination_url_snapshot
-       from bzup.generation_batch_items where batch_id = $1 order by sort_order`,
-    [batchId],
-  );
-  const x = b[0];
-  return {
-    id: x.id,
-    course_id: x.course_id,
-    template_id: x.template_id,
-    template_version: Number(x.template_version),
-    status: x.status,
-    total_count: Number(x.count),
-    source: x.source,
-    actor: { type: x.actor_type, id: x.actor_id, label: x.actor_label_snapshot },
-    url_config_version: Number(x.url_config_version_snapshot),
-    created_at: toIso(x.created_at),
-    results: items.map((i) => ({
-      template_item_id: i.template_item_id,
-      link_id: i.link_id,
-      name: i.name_snapshot,
-      short_url: i.short_url_snapshot,
-      destination_url: i.destination_url_snapshot,
-    })),
-  };
-}
-
 // ---------------------------------------------------------------------------
 // 중복 프리플라이트 (§14.2)
 // ---------------------------------------------------------------------------
@@ -721,30 +534,17 @@ export async function preflight(db: Db, principal: Principal, body: unknown) {
   requirePermission(principal, 'links:create');
   if (!isObject(body)) throw new AppError('INVALID_JSON');
   const mode = body.mode;
-  if (mode !== 'single' && mode !== 'batch') throw validationError('mode는 single 또는 batch여야 합니다.');
+  if (mode !== 'single') throw validationError('mode는 single 이어야 합니다.');
   const { mode: _m, ...rest } = body;
   void _m;
   await consume(db, limits.preflight(principal));
   const outcome = await db.tx(async (q) => {
-    let rows: PlannedRow[];
-    let requestedCourseId: string | null;
-    let templateId: string | null = null;
-    let templateVersion: number | null = null;
-    if (mode === 'single') {
-      const input = parseSingleCreateBody(rest);
-      if (input.reviewToken) throw validationError('프리플라이트에는 review_token을 보내지 않습니다.');
-      requestedCourseId = input.courseId;
-      rows = [plannedFrom('single', 1, input.name, input.destination, input.externalRef, null, 1)];
-    } else {
-      const input = parseBatchCreateBody(rest);
-      if (input.reviewToken) throw validationError('프리플라이트에는 review_token을 보내지 않습니다.');
-      requestedCourseId = input.courseId;
-      templateId = input.templateId;
-      templateVersion = input.templateVersion;
-      // 배치 행 구성 검증은 생성과 같은 규칙
-      rows = await buildBatchRows(q, principal.workspaceId, input);
-    }
-    const courseId = resolveCourseId(principal, requestedCourseId);
+    const templateId: string | null = null;
+    const templateVersion: number | null = null;
+    const input = parseSingleCreateBody(rest);
+    if (input.reviewToken) throw validationError('프리플라이트에는 review_token을 보내지 않습니다.');
+    const rows: PlannedRow[] = [plannedFrom('single', 1, input.name, input.destination, input.externalRef, null, 1)];
+    const courseId = resolveCourseId(principal, input.courseId);
     await requireActiveCourse(q, principal.workspaceId, courseId);
     const policy = await loadUrlPolicy(q);
     for (const r of rows) assertRowDestinations(r, policy.serviceHosts);

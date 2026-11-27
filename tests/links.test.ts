@@ -2,7 +2,7 @@ import { beforeEach, describe, expect, it } from 'vitest';
 import { setupDb, HOST } from './helpers/db';
 import { AppError } from '@/lib/errors';
 import {
-  createBatch, createSingleLink, deleteLink, getLink, getLinkRevisions, parseBatchCreateBody, parsePatchBody,
+  createSingleLink, deleteLink, getLink, getLinkRevisions, parsePatchBody,
   parseSingleCreateBody, patchLink, preflight,
 } from '@/lib/services/links';
 import type { Principal, UserPrincipal } from '@/lib/auth/principal';
@@ -256,72 +256,6 @@ describe('수정·이력 (AC-57~AC-60, AC-20)', () => {
     await expect(env.db.query(`delete from bzup.link_revisions`)).rejects.toThrow();
   });
 });
-
-describe('자동생성 일괄 생성 (AC-44~AC-52)', () => {
-  it('모든 활성 행을 같은 강의로 생성하고 결과를 반환', async () => {
-    const t = await env.addTemplate(['무료 웨비나 신청', '사전 안내 블로그', '라이브 입장']);
-    const body = {
-      course_id: courseA, template_id: t.id, template_version: 1,
-      items: t.items.map((it, i) => ({ template_item_id: it.id, destination_url: `https://bizupclass.com/p${i}` })),
-    };
-    const r = await createBatch(env.db, editor, parseBatchCreateBody(body), ctx());
-    const data = (r.body as { data: { total_count: number; results: { name: string }[] } }).data;
-    expect(data.total_count).toBe(3);
-    expect(data.results.map((x) => x.name)).toEqual(['무료 웨비나 신청', '사전 안내 블로그', '라이브 입장']);
-    const rows = await env.db.query<{ course_id: string; creation_mode: string }>(`select course_id, creation_mode from bzup.links`);
-    expect(rows.every((x) => x.course_id === courseA && x.creation_mode === 'batch')).toBe(true);
-  });
-
-  it('한 행 오류면 0건, 행별 오류 표시', async () => {
-    const t = await env.addTemplate(['a', 'b']);
-    const body = {
-      course_id: courseA, template_id: t.id, template_version: 1,
-      items: [{ template_item_id: t.items[0].id, destination_url: 'https://ok.com/' }, { template_item_id: t.items[1].id, destination_url: 'nope' }],
-    };
-    const e = (() => { try { parseBatchCreateBody(body); } catch (x) { return x as AppError; } })()!;
-    expect(e.code).toBe('VALIDATION_ERROR');
-    expect(e.rowErrors?.[0]).toMatchObject({ template_item_id: t.items[1].id, field: 'destination_url' });
-  });
-
-  it('누락·추가 항목은 TEMPLATE_ITEMS_MISMATCH, 버전 불일치는 TEMPLATE_CHANGED', async () => {
-    const t = await env.addTemplate(['a', 'b']);
-    const base = { course_id: courseA, template_id: t.id, template_version: 1 };
-    const one = [{ template_item_id: t.items[0].id, destination_url: 'https://ok.com/' }];
-    expect((await err(createBatch(env.db, editor, parseBatchCreateBody({ ...base, items: one }), ctx()))).code).toBe('TEMPLATE_ITEMS_MISMATCH');
-    const both = t.items.map((it) => ({ template_item_id: it.id, destination_url: `https://ok.com/${it.name}` }));
-    expect((await err(createBatch(env.db, editor, parseBatchCreateBody({ ...base, template_version: 2, items: both }), ctx()))).code).toBe('TEMPLATE_CHANGED');
-  });
-
-  it('입력 행끼리 같은 URL이면 확인 후 각각 생성 (AC-45, AC-46)', async () => {
-    const t = await env.addTemplate(['a', 'b']);
-    const body = {
-      course_id: courseA, template_id: t.id, template_version: 1,
-      items: t.items.map((it) => ({ template_item_id: it.id, destination_url: 'https://same.com/' })),
-    };
-    const e = await err(createBatch(env.db, editor, parseBatchCreateBody(body), ctx()));
-    expect(e.code).toBe('DUPLICATE_DESTINATION');
-    const d = e.details as { review_token: string; duplicate_kind: string };
-    expect(d.duplicate_kind).toBe('internal');
-    const r = await createBatch(env.db, editor, parseBatchCreateBody({ ...body, review_token: d.review_token, duplicate_decision: 'create_new' }), ctx());
-    expect((r.body as { data: { total_count: number } }).data.total_count).toBe(2);
-  });
-
-  it('마지막 행 저장 실패 시 전체 롤백 (AC-50)', async () => {
-    const t = await env.addTemplate(['a', 'b', 'c']);
-    await env.db.query(`insert into bzup.links (workspace_id, issued_domain, short_code, name, initial_destination_url, destination_url,
-      canonical_destination, destination_fingerprint, course_id, external_ref, status, source, creation_mode, created_by_type, updated_by_type)
-      values ($1,'h','AAAAAAA','x','https://x.com/','https://x.com/','https://x.com/', '\\x00', $2, 'dup-ref','active','web','single','system','system')`,
-      [env.workspaceId, courseA]);
-    const body = {
-      course_id: courseA, template_id: t.id, template_version: 1,
-      items: t.items.map((it, i) => ({ template_item_id: it.id, destination_url: `https://p.com/${i}`, ...(i === 2 ? { external_ref: 'dup-ref' } : {}) })),
-    };
-    expect((await err(createBatch(env.db, editor, parseBatchCreateBody(body), ctx()))).code).toBe('EXTERNAL_REF_EXISTS');
-    expect((await env.db.query<{ n: number }>(`select count(*)::int as n from bzup.links`))[0].n).toBe(1);
-    expect((await env.db.query<{ n: number }>(`select count(*)::int as n from bzup.generation_batches`))[0].n).toBe(0);
-  });
-});
-
 
 describe('링크 삭제 (위험 구역)', () => {
   it('명칭이 같아야 삭제, 삭제 후 조회·목록·이동 제외, type 재사용 가능', async () => {

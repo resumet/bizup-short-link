@@ -182,7 +182,7 @@ curl -X POST ${origin}/api/v1/links \\
 curl ${origin}/api/v1/courses \\
   -H "Authorization: Bearer $BZUP_API_KEY"`}</pre>
         <p className="muted small">전체 API 스펙: <a href="/docs/api" target="_blank" rel="noopener">/docs/api</a> (로그인 없이 공유 가능)</p>
-        <p className="muted small">짧은 주소 생성·사전 확인·자동생성 요청에는 <code>course_id</code>(강의 관리의 UUID)가 반드시 필요합니다.</p>
+        <p className="muted small">짧은 주소 생성·사전 확인 요청에는 <code>course_id</code>(강의 관리의 UUID)가 반드시 필요합니다.</p>
       </div>
 
       {s.history.length > 0 && (

@@ -4,7 +4,6 @@ import { requireSingleIfMatch } from '@/lib/etag';
 import { assertUuidPath } from '@/lib/validation';
 import { requireIdempotencyKey } from '@/lib/services/idempotency';
 import { importCourses, listCoursesForAdmin, updateCourse } from '@/lib/services/courses';
-import { getTemplateForAdmin, saveTemplate } from '@/lib/services/template';
 import { getSystemApiStatus, issueSystemKey, revokeSystemKey } from '@/lib/services/system-api-key';
 import { inviteEmployee, listEmployees, resendInvitation, updateEmployee } from '@/lib/services/employees';
 import { loadUrlPolicy, originFor } from '@/lib/services/settings';
@@ -34,17 +33,7 @@ export async function handleAdminImportCourses(c: Ctx) {
   return storedToResponse(await importCourses(c.db, c.principal, body, key, c.requestId), c.requestId);
 }
 
-export async function handleAdminGetTemplate(c: Ctx) {
-  const t = await getTemplateForAdmin(c.db, c.principal);
-  return json({ data: t.data }, 200, c.requestId, { ETag: t.etag });
-}
 
-export async function handleAdminSaveTemplate(c: Ctx) {
-  const key = requireIdempotencyKey(c.req.headers.get('idempotency-key'));
-  const ifMatch = requireSingleIfMatch(c.req.headers.get('if-match'));
-  const body = await readJson(c.req, LIMITS.edit);
-  return storedToResponse(await saveTemplate(c.db, c.principal, body, ifMatch, key, c.requestId), c.requestId);
-}
 
 // ---------------------------------------------------------------------------
 // 시스템 API 키

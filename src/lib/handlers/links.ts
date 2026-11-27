@@ -5,7 +5,7 @@ import { requireSingleIfMatch } from '@/lib/etag';
 import { assertUuidPath } from '@/lib/validation';
 import { requireIdempotencyKey } from '@/lib/services/idempotency';
 import {
-  batchBody, createBatch, createSingleLink, deleteLink, getLink, getLinkRevisions, parseBatchCreateBody, parsePatchBody,
+  createSingleLink, deleteLink, getLink, getLinkRevisions, parsePatchBody,
   parseSingleCreateBody, patchLink, preflight, serializeLink,
 } from '@/lib/services/links';
 import { listLinks } from '@/lib/services/link-query';
@@ -74,18 +74,7 @@ export async function handlePreflight(c: HandlerCtx) {
   return json({ data: await preflight(c.db, c.principal, body) }, 200, c.requestId);
 }
 
-export async function handleCreateBatch(c: HandlerCtx) {
-  const key = requireIdempotencyKey(c.req.headers.get('idempotency-key'));
-  const input = parseBatchCreateBody(await readJson(c.req, LIMITS.bulk));
-  const r = await createBatch(c.db, c.principal, input, writeCtx(c, key));
-  return storedToResponse(r, c.requestId);
-}
 
-export async function handleGetBatch(c: HandlerCtx) {
-  requirePermission(c.principal, 'links:read');
-  const id = assertUuidPath(c.params.id);
-  return json({ data: await batchBody(c.db, c.principal.workspaceId, id) }, 200, c.requestId);
-}
 
 export async function handleListCourses(c: HandlerCtx) {
   // 웹은 직원 모두, 외부는 courses:read
@@ -102,19 +91,6 @@ export async function handleListCourses(c: HandlerCtx) {
   return json({ data: rows.map((r) => ({ ...r, version: Number(r.version) })) }, 200, c.requestId);
 }
 
-export async function handleGetTemplate(c: HandlerCtx) {
-  requirePermission(c.principal, 'links:create');
-  const t = await c.db.query<{ id: string; display_name: string; version: number }>(
-    `select id, display_name, version from bzup.generation_templates where workspace_id = $1`,
-    [c.principal.workspaceId],
-  );
-  if (!t[0]) return json({ data: null }, 200, c.requestId);
-  const items = await c.db.query<{ id: string; name: string; sort_order: number }>(
-    `select id, name, sort_order, destination_slots from bzup.generation_template_items where template_id = $1 and is_active order by sort_order, id`,
-    [t[0].id],
-  );
-  return json({ data: { id: t[0].id, display_name: t[0].display_name, version: Number(t[0].version), items } }, 200, c.requestId);
-}
 
 /** POST /api/v1/short-links: { course_id, type_key, destination_url, name } */
 export async function handleSimpleCreate(c: HandlerCtx) {
