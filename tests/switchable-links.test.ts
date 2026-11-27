@@ -57,15 +57,15 @@ describe('전환형 유형', () => {
     expect(await code([{ key: 'a', label: 'A' }])).toBe('VALIDATION_ERROR');
     expect(await code([{ key: 'a', label: 'A' }, { key: 'a', label: 'B' }])).toBe('VALIDATION_ERROR');
     expect(await code([{ key: 'A', label: 'A' }, { key: 'b', label: 'B' }])).toBe('VALIDATION_ERROR');
-    const ok = await createLinkType(env.db, owner, { key: 'webinar', label: '웨비나', slots: [{ key: 'chat', label: '단톡방' }, { key: 'replay', label: '다시보기' }] }, crypto.randomUUID(), 'r');
-    expect((ok.body as { data: { slots: unknown } }).data.slots).toEqual([{ key: 'chat', label: '단톡방' }, { key: 'replay', label: '다시보기' }]);
-    // 링크가 없으면 구성 변경 가능
-    await updateLinkType(env.db, owner, 'webinar', { slots: [{ key: 'chat', label: '단톡방' }, { key: 'live', label: '라이브' }] }, crypto.randomUUID(), 'r');
-    await createTypedShortLink(env.db, api, { course_id: course, type_key: 'webinar', name: 'w', destination_url: CHAT }, ctx());
-    const e = await err(updateLinkType(env.db, owner, 'webinar', { slots: null }, crypto.randomUUID(), 'r'));
+    // 전환형은 free_chat 만: 다른 key 에 구성을 주면 거절
+    expect(await code([{ key: 'chat', label: '단톡방' }, { key: 'replay', label: '다시보기' }])).toBe('VALIDATION_ERROR');
+    // free_chat 은 링크가 없으면 구성 변경 가능
+    await updateLinkType(env.db, owner, 'free_chat', { slots: [{ key: 'chat', label: '단톡방' }, { key: 'live', label: '라이브' }] }, crypto.randomUUID(), 'r');
+    await createTypedShortLink(env.db, api, { course_id: course, type_key: 'free_chat', name: 'w', destination_url: CHAT }, ctx());
+    const e = await err(updateLinkType(env.db, owner, 'free_chat', { slots: null }, crypto.randomUUID(), 'r'));
     expect(e.code).toBe('CONFLICT');
     // 이름 변경은 계속 가능
-    await updateLinkType(env.db, owner, 'webinar', { label: '웨비나 2' }, crypto.randomUUID(), 'r');
+    await updateLinkType(env.db, owner, 'free_chat', { label: '무료단톡방 2' }, crypto.randomUUID(), 'r');
   });
 });
 

@@ -165,3 +165,15 @@ describe('유형 관리 (최고관리자)', () => {
     expect((await err(createLinkType(env.db, editor, { key: 'x', label: 'x' }, k(), 'r'))).code).toBe('INSUFFICIENT_PERMISSION');
   });
 });
+
+describe('전환형 유형은 free_chat 하나', () => {
+  it('다른 유형에는 전환 주소 구성을 둘 수 없다 (서비스·DB)', async () => {
+    const k = () => crypto.randomUUID();
+    const slots = [{ key: 'a', label: 'A' }, { key: 'b', label: 'B' }];
+    expect((await err(createLinkType(env.db, owner, { key: 'other_chat', label: '다른 단톡방', slots }, k(), 'r'))).code).toBe('VALIDATION_ERROR');
+    expect((await err(updateLinkType(env.db, owner, 'landing', { slots }, k(), 'r'))).code).toBe('VALIDATION_ERROR');
+    await expect(env.db.query(`insert into bzup.short_link_types (key, label, slots) values ('x_chat', 'x', $1::text::jsonb)`, [JSON.stringify(slots)])).rejects.toThrow();
+    const types = await listShortLinkTypes(env.db, api);
+    expect(types.filter((t) => t.slots).map((t) => t.key)).toEqual(['free_chat']);
+  });
+});

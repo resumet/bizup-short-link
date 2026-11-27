@@ -170,6 +170,7 @@ export default function ApiDocsPage() {
           단톡방·유튜브 라이브·줌 라이브 주소 3개를 갖고, 문자로 나간 같은 짧은 주소가 라이브 전에는 단톡방, 라이브 중에는 유튜브로 연결됩니다.
         </p>
         <ul className="small">
+          <li>전환형 유형은 <code>free_chat</code> 하나뿐입니다. 따라서 한 강의의 전환형 짧은 주소는 <code>free_chat</code> 1개입니다.</li>
           <li>만들 때는 <strong>첫 주소만 필수</strong>입니다. 유튜브·줌 주소는 비워 두었다가 나중에 채웁니다.</li>
           <li>링크는 <strong>강의 UUID + type_key</strong>로 찾습니다. 링크 ID·ETag 가 필요 없습니다.</li>
           <li>전환은 다음 클릭부터 바로 적용되고, 모든 변경은 관리 화면의 변경 이력에 남습니다.</li>

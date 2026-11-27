@@ -47,7 +47,9 @@ try {
       r.length ? console.log(`${cmd === 'activate' ? '활성화' : '비활성화'}: ${key}`) : fail(`없는 key: ${key}`);
     }
   } else if (cmd === 'slots') {
-    if (needKey()) {
+    if (key !== 'free_chat' && (label ?? '').trim() !== 'none') {
+      fail('전환형 유형은 free_chat 하나만 둘 수 있습니다.');
+    } else if (needKey()) {
       let slots = null;
       const spec = (label ?? '').trim();
       if (spec && spec !== 'none') {

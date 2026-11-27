@@ -106,18 +106,6 @@ export function LinkTypesAdmin({ types }: { types: LinkType[] }) {
         </div>
         {form.key !== '' && !keyValid && <p className="muted small" style={{ margin: 0 }}>소문자 영문으로 시작하고 소문자 영문·숫자·밑줄만 쓸 수 있습니다 (1~64자).</p>}
         {keyTaken && <p className="muted small" style={{ margin: 0 }}>이미 있는 key 입니다. 다른 용도라면 새 key 를 사용해 주세요.</p>}
-        <label>
-          전환 주소 (선택 · 전환형 유형)
-          <input
-            value={form.slots}
-            onChange={(e) => setForm({ ...form, slots: e.target.value })}
-            placeholder="예: chat=단톡방, youtube=유튜브 라이브, zoom=줌 라이브"
-            aria-invalid={typeof formSlots === 'string'}
-          />
-        </label>
-        {typeof formSlots === 'string'
-          ? <p className="error small" style={{ margin: 0 }}>{formSlots}</p>
-          : <p className="muted small" style={{ margin: 0 }}>비우면 일반 유형입니다. 채우면 이 유형의 짧은 주소는 첫 주소로 시작하고, 나머지 주소는 나중에 채워 전환합니다 (2~5개).</p>}
         <p className="muted small" style={{ margin: '0.25rem 0 0' }}>key 는 API 요청의 <code>type_key</code> 로 쓰이며, 만든 뒤에는 바꿀 수 없습니다.</p>
       </form>
       {msg && <p className={msg.kind} role="status">{msg.text}</p>}
@@ -154,10 +142,10 @@ export function LinkTypesAdmin({ types }: { types: LinkType[] }) {
                   ) : t.slots ? (
                     <span>{t.slots.map((d) => d.label).join(' → ')}<span className="sub"><code>{t.slots.map((d) => d.key).join(' · ')}</code></span></span>
                   ) : <span className="muted">일반</span>}
-                  {slotEditing !== t.key && !t.used && (
+                  {slotEditing !== t.key && !t.used && t.key === 'free_chat' && (
                     <span className="sub">
                       <button className="linklike small" type="button" disabled={busy} onClick={() => { setSlotEditing(t.key); setSlotDraft(slotSpecOf(t.slots)); }}>
-                        {t.slots ? '구성 수정' : '전환형으로 바꾸기'}
+                        {t.slots ? '구성 수정' : '전환 주소 구성'}
                       </button>
                     </span>
                   )}
@@ -186,6 +174,7 @@ export function LinkTypesAdmin({ types }: { types: LinkType[] }) {
         </table>
       </div>
       <p className="muted small">
+        전환형(전환 주소가 있는) 유형은 <code>free_chat</code> 하나뿐이라, 한 강의의 전환형 짧은 주소는 무료단톡방 1개입니다.
         한 번이라도 링크 발급에 쓰인 유형은 제거할 수 없고 비활성화만 할 수 있습니다. 비활성 유형으로는 새 짧은 주소를 만들 수 없지만, 이미 발급된 주소는 계속 동작합니다.
         전환 주소 구성은 그 유형으로 링크를 만들기 전까지만 바꿀 수 있습니다.
       </p>

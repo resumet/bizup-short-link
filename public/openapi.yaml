@@ -11,7 +11,7 @@ info:
     - 숫자 `type` 방식(0000~9999)은 폐기되었습니다. `type` 필드를 보내면 422 `VALIDATION_ERROR` 입니다.
     - 같은 강의에는 유형별로 짧은 주소가 하나만 존재합니다.
 
-    **전환형 유형** (`slots` 가 있는 유형, 예: `free_chat` 무료단톡방 = chat 단톡방 / youtube 유튜브 라이브 / zoom 줌 라이브)
+    **전환형 유형** (`slots` 가 있는 유형은 `free_chat` 하나뿐 — 한 강의의 전환형 링크는 1개, 예: `free_chat` 무료단톡방 = chat 단톡방 / youtube 유튜브 라이브 / zoom 줌 라이브)
     - 짧은 주소 하나에 전환 주소 2~5개를 둡니다. 만들 때는 첫 주소만 필수이고 나머지는 비워 둡니다.
     - 주소가 나오면 `PUT /api/v1/short-links/slots` 로 채우고, `POST /api/v1/short-links/switch` 로 연결 대상을 바꿉니다.
       전환은 다음 클릭부터 바로 적용됩니다 (짧은 주소 응답은 캐시하지 않음).

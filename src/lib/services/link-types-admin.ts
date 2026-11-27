@@ -41,12 +41,21 @@ function parseKey(v: unknown): string {
   return v;
 }
 
+/** 전환형(전환 주소 구성이 있는) 유형은 free_chat 하나뿐이다 → 한 강의의 전환형 링크도 free_chat 1개 */
+export const SWITCHABLE_TYPE_KEY = 'free_chat';
+function assertSwitchableKey(key: string, slots: unknown) {
+  if (slots && key !== SWITCHABLE_TYPE_KEY) {
+    throw validationError(`전환형 유형은 ${SWITCHABLE_TYPE_KEY} 하나만 둘 수 있습니다.`, [{ field: 'slots', message: `${SWITCHABLE_TYPE_KEY} 전용` }]);
+  }
+}
+
 export async function createLinkType(db: Db, p: UserPrincipal, body: unknown, idemKey: string, requestId: string) {
   if (!isObject(body)) throw new AppError('INVALID_JSON');
   assertAllowedFields(body, ['key', 'label', 'active', 'slots']);
   const key = parseKey(body.key);
   const label = cleanText(body.label, 'label', '표시 이름', 1, 120);
   const slots = parseSlotDefs(body.slots);
+  assertSwitchableKey(key, slots);
   if (body.active !== undefined && typeof body.active !== 'boolean') throw validationError('active 는 true/false 입니다.');
   const active = body.active ?? true;
   return runAdminWrite(db, p, { method: 'POST', route: '/admin/short-link-types', idempotencyKey: idemKey, hashInput: body, resultObjectType: 'short_link_type' },
@@ -70,6 +79,7 @@ export async function updateLinkType(db: Db, p: UserPrincipal, key: string, body
   if (body.active !== undefined && typeof body.active !== 'boolean') throw validationError('active 는 true/false 입니다.');
   const slotsGiven = 'slots' in body;
   const slots = slotsGiven ? parseSlotDefs(body.slots) : undefined;
+  if (slots) assertSwitchableKey(key, slots);
   if (label === undefined && body.active === undefined && !slotsGiven) throw validationError('변경할 항목이 없습니다.');
   return runAdminWrite(db, p, { method: 'PATCH', route: `/admin/short-link-types/${key}`, idempotencyKey: idemKey, hashInput: body, resultObjectType: 'short_link_type' },
     async (q, owner) => {
